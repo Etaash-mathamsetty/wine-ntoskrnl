@@ -2786,7 +2786,7 @@ PVOID WINAPI MmAllocateNonCachedMemory( SIZE_T size )
 PVOID WINAPI MmAllocateContiguousMemory( SIZE_T size, PHYSICAL_ADDRESS highest_valid_address )
 {
     FIXME( "%Iu, %s semi-stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
-    return MmAllocateContiguousMemorySpecifyCache(size, (PHYSICAL_ADDRESS)0, highest_address, 0, MmNonCached);
+    return MmAllocateContiguousMemorySpecifyCache(size, (PHYSICAL_ADDRESS)0, highest_valid_address, (PHYSICAL_ADDRESS)0, MmNonCached);
 }
 
 /***********************************************************************

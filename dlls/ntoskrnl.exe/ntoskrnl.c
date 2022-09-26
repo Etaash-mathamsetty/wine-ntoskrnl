@@ -2595,6 +2595,16 @@ ULONG WINAPI KeQueryActiveProcessorCountEx(USHORT group_number)
     return GetActiveProcessorCount(group_number);
 }
 
+ULONG WINAPI KeQueryActiveProcessorCount(PKAFFINITY active_processors)
+{
+    TRACE("active_processors %p.\n", active_processors);
+
+    if(active_processors)
+        *active_processors = KeQueryActiveProcessors();
+
+    return KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+}
+
 /**********************************************************************
  *           KeQueryInterruptTime   (NTOSKRNL.EXE.@)
  *
@@ -4549,7 +4559,7 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
         ntoskrnl_heap = HeapCreate( HEAP_CREATE_ENABLE_EXECUTE, 0, 0 );
         dpc_call_tls_index = TlsAlloc();
         LdrRegisterDllNotification( 0, ldr_notify_callback, NULL, &ldr_notify_cookie );
-        KeNumberProcessors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+        KeNumberProcessors = (CCHAR) KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
         break;
     case DLL_PROCESS_DETACH:
         LdrUnregisterDllNotification( ldr_notify_cookie );

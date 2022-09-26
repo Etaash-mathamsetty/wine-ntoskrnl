@@ -1,3 +1,6 @@
+This fork of wine attempts to get more anti-cheats to work.
+For those of you looking to contribute, find a better way to implement MmMapLockedPagesSpecifyCache (which would get a ton of anti-cheats to just "start working")
+
 1. INTRODUCTION
 
 Wine is a program which allows running Microsoft Windows programs

@@ -2785,8 +2785,8 @@ PVOID WINAPI MmAllocateNonCachedMemory( SIZE_T size )
  */
 PVOID WINAPI MmAllocateContiguousMemory( SIZE_T size, PHYSICAL_ADDRESS highest_valid_address )
 {
-    FIXME( "%Iu, %s stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
-    return NULL;
+    FIXME( "%Iu, %s semi-stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
+    return MmAllocateContiguousMemorySpecifyCache(size, (PHYSICAL_ADDRESS)0, highest_address, 0, MmNonCached);
 }
 
 /***********************************************************************
@@ -2798,8 +2798,22 @@ PVOID WINAPI MmAllocateContiguousMemorySpecifyCache( SIZE_T size,
                                                      PHYSICAL_ADDRESS BoundaryAddressMultiple,
                                                      MEMORY_CACHING_TYPE CacheType )
 {
-    FIXME(": stub\n");
-    return NULL;
+    DWORD protect = PAGE_READWRITE;
+    FIXME( ": ( %Iu %s %s %s %x ) semi-stub\n", size, wine_dbgstr_longlong(lowest_valid_address.QuadPart),
+                                            wine_dbgstr_longlong(highest_valid_address.QuadPart),
+                                            wine_dbgstr_longlong(BoundaryAddressMultiple.QuadPart), CacheType );
+    switch (CacheType)
+    {
+        case MmNonCached:
+            protect |= PAGE_NOCACHE;
+            break;
+        case MmWriteCombined:
+            protect |= PAGE_WRITECOMBINE;
+            break;
+        default:
+            break;
+    }
+    return VirtualAlloc( NULL, size, MEM_RESERVE|MEM_COMMIT, protect );
 }
 
 /***********************************************************************

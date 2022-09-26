@@ -606,6 +606,8 @@
 @ stdcall KeQuerySystemTime(ptr)
 @ stdcall KeQueryTickCount(ptr)
 @ stdcall KeQueryTimeIncrement()
+@ stdcall KeQueryMaximumProcessorCountEx(long)
+@ stdcall KeQueryMaximumProcessorCount()
 @ stub KeRaiseUserException
 @ stdcall KeReadStateEvent(ptr)
 @ stub KeReadStateMutant

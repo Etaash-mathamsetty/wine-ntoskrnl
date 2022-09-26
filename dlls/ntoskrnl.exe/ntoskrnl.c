@@ -3318,11 +3318,11 @@ PVOID WINAPI MmGetSystemRoutineAddress(PUNICODE_STRING SystemRoutineName)
     if (RtlUnicodeStringToAnsiString( &routineNameA, SystemRoutineName, TRUE ) == STATUS_SUCCESS)
     {
         /* We only support functions exported from ntoskrnl.exe or hal.dll */
-        hMod = GetModuleHandleW( ntoskrnlW );
+        hMod = LoadLibraryW( ntoskrnlW );
         pFunc = GetProcAddress( hMod, routineNameA.Buffer );
         if (!pFunc)
         {
-           hMod = GetModuleHandleW( halW );
+           hMod = LoadLibraryW( halW );
 
            if (hMod) pFunc = GetProcAddress( hMod, routineNameA.Buffer );
         }

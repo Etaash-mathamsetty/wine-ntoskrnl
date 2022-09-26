@@ -2781,15 +2781,6 @@ PVOID WINAPI MmAllocateNonCachedMemory( SIZE_T size )
 }
 
 /***********************************************************************
- *           MmAllocateContiguousMemory   (NTOSKRNL.EXE.@)
- */
-PVOID WINAPI MmAllocateContiguousMemory( SIZE_T size, PHYSICAL_ADDRESS highest_valid_address )
-{
-    FIXME( "%Iu, %s semi-stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
-    return MmAllocateContiguousMemorySpecifyCache(size, (PHYSICAL_ADDRESS)0, highest_valid_address, (PHYSICAL_ADDRESS)0, MmNonCached);
-}
-
-/***********************************************************************
  *           MmAllocateContiguousMemorySpecifyCache   (NTOSKRNL.EXE.@)
  */
 PVOID WINAPI MmAllocateContiguousMemorySpecifyCache( SIZE_T size,
@@ -2814,6 +2805,15 @@ PVOID WINAPI MmAllocateContiguousMemorySpecifyCache( SIZE_T size,
             break;
     }
     return VirtualAlloc( NULL, size, MEM_RESERVE|MEM_COMMIT, protect );
+}
+
+/***********************************************************************
+ *           MmAllocateContiguousMemory   (NTOSKRNL.EXE.@)
+ */
+PVOID WINAPI MmAllocateContiguousMemory( SIZE_T size, PHYSICAL_ADDRESS highest_valid_address )
+{
+    FIXME( "%Iu, %s semi-stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
+    return MmAllocateContiguousMemorySpecifyCache(size, (PHYSICAL_ADDRESS)0, highest_valid_address, (PHYSICAL_ADDRESS)0, MmNonCached);
 }
 
 /***********************************************************************

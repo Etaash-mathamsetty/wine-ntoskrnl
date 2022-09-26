@@ -496,10 +496,7 @@ static HRESULT WINAPI WMReader_GetOutputCount(IWMReader *iface, DWORD *count)
 
     TRACE("reader %p, count %p.\n", reader, count);
 
-    EnterCriticalSection(&reader->wm_reader->cs);
-    *count = reader->wm_reader->stream_count;
-    LeaveCriticalSection(&reader->wm_reader->cs);
-    return S_OK;
+    return IWMSyncReader2_GetOutputCount(reader->reader, count);
 }
 
 static HRESULT WINAPI WMReader_GetOutputProps(IWMReader *iface, DWORD output, IWMOutputMediaProps **props)
@@ -508,7 +505,7 @@ static HRESULT WINAPI WMReader_GetOutputProps(IWMReader *iface, DWORD output, IW
 
     TRACE("reader %p, output %lu, props %p.\n", reader, output, props);
 
-    return wm_reader_get_output_props(reader->wm_reader, output, props);
+    return IWMSyncReader2_GetOutputProps(reader->reader, output, props);
 }
 
 static HRESULT WINAPI WMReader_SetOutputProps(IWMReader *iface, DWORD output, IWMOutputMediaProps *props)
@@ -517,7 +514,7 @@ static HRESULT WINAPI WMReader_SetOutputProps(IWMReader *iface, DWORD output, IW
 
     TRACE("reader %p, output %lu, props %p.\n", reader, output, props);
 
-    return wm_reader_set_output_props(reader->wm_reader, output, props);
+    return IWMSyncReader2_SetOutputProps(reader->reader, output, props);
 }
 
 static HRESULT WINAPI WMReader_GetOutputFormatCount(IWMReader *iface, DWORD output, DWORD *count)
@@ -526,7 +523,7 @@ static HRESULT WINAPI WMReader_GetOutputFormatCount(IWMReader *iface, DWORD outp
 
     TRACE("reader %p, output %lu, count %p.\n", reader, output, count);
 
-    return wm_reader_get_output_format_count(reader->wm_reader, output, count);
+    return IWMSyncReader2_GetOutputFormatCount(reader->reader, output, count);
 }
 
 static HRESULT WINAPI WMReader_GetOutputFormat(IWMReader *iface, DWORD output,
@@ -536,7 +533,7 @@ static HRESULT WINAPI WMReader_GetOutputFormat(IWMReader *iface, DWORD output,
 
     TRACE("reader %p, output %lu, index %lu, props %p.\n", reader, output, index, props);
 
-    return wm_reader_get_output_format(reader->wm_reader, output, index, props);
+    return IWMSyncReader2_GetOutputFormat(reader->reader, output, index, props);
 }
 
 static HRESULT WINAPI WMReader_Start(IWMReader *iface,
@@ -701,7 +698,7 @@ static HRESULT WINAPI WMReaderAdvanced_SetStreamsSelected(IWMReaderAdvanced6 *if
     TRACE("reader %p, count %u, stream_numbers %p, selections %p.\n",
             reader, count, stream_numbers, selections);
 
-    return wm_reader_set_streams_selected(reader->wm_reader, count, stream_numbers, selections);
+    return IWMSyncReader2_SetStreamsSelected(reader->reader, count, stream_numbers, selections);
 }
 
 static HRESULT WINAPI WMReaderAdvanced_GetStreamSelected(IWMReaderAdvanced6 *iface,
@@ -711,7 +708,7 @@ static HRESULT WINAPI WMReaderAdvanced_GetStreamSelected(IWMReaderAdvanced6 *ifa
 
     TRACE("reader %p, stream_number %u, selection %p.\n", reader, stream_number, selection);
 
-    return wm_reader_get_stream_selection(reader->wm_reader, stream_number, selection);
+    return IWMSyncReader2_GetStreamSelected(reader->reader, stream_number, selection);
 }
 
 static HRESULT WINAPI WMReaderAdvanced_SetReceiveSelectionCallbacks(IWMReaderAdvanced6 *iface, BOOL get_callbacks)
@@ -810,7 +807,7 @@ static HRESULT WINAPI WMReaderAdvanced_GetMaxStreamSampleSize(IWMReaderAdvanced6
 
     TRACE("reader %p, stream_number %u, size %p.\n", reader, stream_number, size);
 
-    return wm_reader_get_max_stream_size(reader->wm_reader, stream_number, size);
+    return IWMSyncReader2_GetMaxStreamSampleSize(reader->reader, stream_number, size);
 }
 
 static HRESULT WINAPI WMReaderAdvanced_NotifyLateDelivery(IWMReaderAdvanced6 *iface, QWORD lateness)

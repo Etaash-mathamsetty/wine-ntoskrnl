@@ -2586,6 +2586,8 @@ KAFFINITY WINAPI KeQueryActiveProcessors( void )
     return affinity_mask;
 }
 
+CCHAR KeNumberProcessors;
+
 ULONG WINAPI KeQueryActiveProcessorCountEx(USHORT group_number)
 {
     TRACE("group_number %u.\n", group_number);
@@ -4547,6 +4549,7 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
         ntoskrnl_heap = HeapCreate( HEAP_CREATE_ENABLE_EXECUTE, 0, 0 );
         dpc_call_tls_index = TlsAlloc();
         LdrRegisterDllNotification( 0, ldr_notify_callback, NULL, &ldr_notify_cookie );
+        KeNumberProcessors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
         break;
     case DLL_PROCESS_DETACH:
         LdrUnregisterDllNotification( ldr_notify_cookie );

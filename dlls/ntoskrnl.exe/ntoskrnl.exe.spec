@@ -593,7 +593,7 @@
 @ stdcall KeLeaveCriticalRegion()
 @ stub KeLoaderBlock
 @ stdcall -arch=x86_64 KeLowerIrql(long)
-@ stub KeNumberProcessors
+@ export KeNumberProcessors
 @ stub KeProfileInterrupt
 @ stub KeProfileInterruptWithSource
 @ stub KePulseEvent

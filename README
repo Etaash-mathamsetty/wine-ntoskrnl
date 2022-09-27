@@ -1,5 +1,12 @@
 This fork of wine attempts to get more anti-cheats to work.
 For those of you looking to contribute, find a better way to implement MmMapLockedPagesSpecifyCache (which would get a ton of anti-cheats to just "start working")
+TODO:
+InitializeSynchronizationBarrier
+EnterSynchronizationBarrier
+DeleteSynchronizationBarrier
+KeIpiGenericCall
+SeExports (an export, I already have a patch for this)
+
 
 1. INTRODUCTION
 

@@ -6,6 +6,8 @@ EnterSynchronizationBarrier
 DeleteSynchronizationBarrier
 KeIpiGenericCall
 SeExports (an export, I already have a patch for this)
+I had a big brain time moment and realized that I need to implement support for the parity flag (PF) in my instruction emulation code, 
+once that's done, I will add it here
 
 wine bugs fixed (probably):
 https://bugs.winehq.org/show_bug.cgi?id=49394

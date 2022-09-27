@@ -7,6 +7,12 @@ DeleteSynchronizationBarrier
 KeIpiGenericCall
 SeExports (an export, I already have a patch for this)
 
+wine bugs fixed (probably):
+https://bugs.winehq.org/show_bug.cgi?id=49394
+https://bugs.winehq.org/show_bug.cgi?id=46760
+
+notable bugs:
+https://bugs.winehq.org/show_bug.cgi?id=50201
 
 1. INTRODUCTION
 

@@ -725,7 +725,7 @@ class VkFunction(object):
         pfn += ")"
         return pfn
 
-    def prototype(self, call_conv=None, prefix=None, postfix=None):
+    def prototype(self, call_conv=None, prefix=None, postfix=None, is_thunk=False):
         """ Generate prototype for given function.
 
         Args:
@@ -747,33 +747,15 @@ class VkFunction(object):
         # Add all the parameters.
         proto += ", ".join([p.definition() for p in self.params])
 
+        if is_thunk and self.extra_param:
+            proto += ", void *" + self.extra_param
+
         if postfix is not None:
             proto += ") {0}".format(postfix)
         else:
             proto += ")"
 
         return proto
-
-    def body(self, params_prefix=""):
-        body = ""
-
-        if not self.needs_private_thunk():
-            body += "    {0}".format(self.trace(params_prefix=params_prefix))
-
-        params = ", ".join([p.variable(conv=False, params_prefix=params_prefix) for p in self.params])
-
-        # Call the native Vulkan function.
-        body += "    "
-        if self.returns_longlong():
-            body += "{0}result = ".format(params_prefix)
-        elif self.type != "void":
-            body += "return "
-        body += "{0}.p_{1}({2});\n".format(self.params[0].dispatch_table(params_prefix),
-                                           self.name, params)
-        if self.type == "void" or self.returns_longlong():
-            body += "    return STATUS_SUCCESS;\n"
-
-        return body
 
     def loader_body(self):
         body = "    struct {0}_params params;\n".format(self.name)
@@ -792,7 +774,7 @@ class VkFunction(object):
             body += "    return params.result;\n"
         return body
 
-    def body_conversion(self, conv, params_prefix=""):
+    def body(self, conv, unwrap=True, params_prefix=""):
         body = ""
         result_prefix = ""
 
@@ -809,45 +791,48 @@ class VkFunction(object):
                     body += "    {0}_host *{1}_host;\n".format(p.type, p.name)
                 else:
                     body += "    {0}_host {1}_host;\n".format(p.type, p.name)
-            elif p.needs_unwrapping():
+            elif unwrap and p.needs_unwrapping():
                 if p.is_dynamic_array():
                     body += "    {0} *{1}_host;\n".format(p.type, p.name)
                 else:
                     body += "    {0} {1}_host;\n".format(p.type, p.name)
 
-        if not self.needs_private_thunk():
+        if params_prefix:
             body += "    {0}\n".format(self.trace(params_prefix=params_prefix))
 
         # Call any win_to_host conversion calls.
         for p in self.params:
-            if p.needs_input_conversion() and (p.needs_unwrapping() or conv):
+            if p.needs_input_conversion() and (conv or (unwrap and p.needs_unwrapping())):
                 body += p.copy(Direction.INPUT, prefix=params_prefix)
 
         # Build list of parameters containing converted and non-converted parameters.
         # The param itself knows if conversion is needed and applies it when we set conv=True.
-        params = ", ".join([p.variable(conv=conv, params_prefix=params_prefix) for p in self.params])
+        params = ", ".join([p.variable(conv=conv, unwrap=unwrap, params_prefix=params_prefix) for p in self.params])
+        if self.extra_param:
+            params += ", {0}{1}".format(params_prefix, self.extra_param)
+
+        if unwrap or self.thunk_type == ThunkType.PUBLIC:
+            func_prefix = "{0}.p_".format(self.params[0].dispatch_table(params_prefix))
+        else:
+            func_prefix = "wine_"
 
         # Call the native Vulkan function.
         if self.type == "void":
-            body += "    {0}.p_{1}({2});\n".format(self.params[0].dispatch_table(params_prefix),
-                                                   self.name, params)
+            body += "    {0}{1}({2});\n".format(func_prefix, self.name, params)
         else:
-            body += "    {0}result = {1}.p_{2}({3});\n".format(result_prefix,
-                                                               self.params[0].dispatch_table(params_prefix),
-                                                               self.name, params)
-
-        body += "\n"
+            body += "    {0}result = {1}{2}({3});\n".format(result_prefix, func_prefix, self.name, params)
 
         # Call any host_to_win conversion calls.
-        for p in self.params:
-            if not p.needs_output_conversion():
-                continue
+        if conv and unwrap:
+            for p in self.params:
+                if not p.output_conv:
+                    continue
 
-            body += p.copy(Direction.OUTPUT, prefix=params_prefix)
+                body += p.copy(Direction.OUTPUT, prefix=params_prefix)
 
         # Perform any required cleanups. Most of these are for array functions.
         for p in self.params:
-            if p.needs_free() and (p.needs_unwrapping() or conv):
+            if p.needs_free() and (conv or (unwrap and p.needs_unwrapping())):
                 body += p.free(prefix=params_prefix)
 
         # Finally return the result.
@@ -894,31 +879,18 @@ class VkFunction(object):
         stub += "}\n\n"
         return stub
 
-    def thunk(self, prefix=None):
+    def thunk(self, prefix=None, conv=False):
         if prefix == "thunk_":
             thunk = self.prototype(prefix=prefix)
             thunk += "\n{\n"
-            params_prefix = ""
-        else:
-            thunk = "NTSTATUS {0}{1}(void *args)\n".format(prefix, self.name)
-            thunk += "{\n"
-            thunk += "    struct {0}_params *params = args;\n".format(self.name)
-            params_prefix = "params->"
+            thunk += self.body(conv=conv)
+            thunk += "}\n\n"
+            return thunk
 
-        if self.needs_conversion():
-            thunk += "#if defined(USE_STRUCT_CONVERSION)\n"
-            thunk += self.body_conversion(conv=True, params_prefix=params_prefix)
-            thunk += "#else\n"
-            if self.needs_unwrapping():
-                thunk += self.body_conversion(conv=False, params_prefix=params_prefix)
-            else:
-                thunk += self.body(params_prefix=params_prefix)
-            thunk += "#endif\n"
-        elif self.needs_unwrapping():
-            thunk += self.body_conversion(conv=False, params_prefix=params_prefix)
-        else:
-            thunk += self.body(params_prefix=params_prefix)
-
+        thunk = "NTSTATUS {0}{1}(void *args)\n".format(prefix, self.name)
+        thunk += "{\n"
+        thunk += "    struct {0}_params *params = args;\n".format(self.name)
+        thunk += self.body(conv=conv, unwrap=self.thunk_type == ThunkType.PUBLIC, params_prefix="params->")
         thunk += "}\n\n"
         return thunk
 
@@ -1843,7 +1815,7 @@ class VkParam(VkVariable):
 
         LOGGER.error("Unhandled spec conversion for type: {0}".format(self.type))
 
-    def variable(self, conv=False, params_prefix=""):
+    def variable(self, conv, unwrap, params_prefix=""):
         """ Returns 'glue' code during generation of a function call on how to access the variable.
         This function handles various scenarios such as 'unwrapping' if dispatchable objects and
         renaming of parameters in case of win32 -> host conversion.
@@ -1854,16 +1826,16 @@ class VkParam(VkVariable):
 
         # Hack until we enable allocation callbacks from ICD to application. These are a joy
         # to enable one day, because of calling convention conversion.
-        if "VkAllocationCallbacks" in self.type:
+        if unwrap and "VkAllocationCallbacks" in self.type:
             LOGGER.debug("TODO: setting NULL VkAllocationCallbacks for {0}".format(self.name))
             return "NULL"
 
-        if self.needs_unwrapping() or (conv and self.needs_conversion()):
+        if (unwrap and self.needs_unwrapping()) or (conv and self.needs_conversion()):
             if self.is_dynamic_array():
                 return "{0}_host".format(self.name)
             else:
                 return "&{0}_host".format(self.name)
-        else:
+        elif unwrap:
             if self.object_type != None and self.type == "uint64_t":
                 return "wine_vk_unwrap_handle({0}{1}, {0}{2})".format(params_prefix, self.object_type, self.name)
 
@@ -1872,6 +1844,8 @@ class VkParam(VkVariable):
             p = "{0}{1}".format(params_prefix, self.name)
             driver_handle = self.handle.driver_handle(p) if self.is_handle() else None
             return driver_handle if driver_handle else p
+        else:
+            return "{0}{1}".format(params_prefix, self.name)
 
 
 class VkStruct(Sequence):
@@ -2716,7 +2690,7 @@ class VkGenerator(object):
             f.write("{0}{1}".format("# " if spec_file else " * ", line).rstrip(" ") + "\n")
         f.write("\n" if spec_file else " */\n\n")
 
-    def generate_thunks_c(self, f, prefix):
+    def generate_thunks_c(self, f):
         self._generate_copyright(f)
 
         f.write("#if 0\n")
@@ -2746,12 +2720,17 @@ class VkGenerator(object):
             if vk_func.loader_thunk_type == ThunkType.NONE:
                 continue
 
+            f.write("#if !defined(USE_STRUCT_CONVERSION)\n\n")
             if vk_func.needs_private_thunk():
                 f.write(vk_func.thunk(prefix="thunk_"))
-
-            if vk_func.thunk_type == ThunkType.PUBLIC:
-                f.write("static ")
-                f.write(vk_func.thunk(prefix=prefix))
+            f.write("static ")
+            f.write(vk_func.thunk(prefix="thunk64_"))
+            f.write("#else /* USE_STRUCT_CONVERSION */\n\n")
+            if vk_func.needs_private_thunk():
+                f.write(vk_func.thunk(prefix="thunk_", conv=True))
+            f.write("static ")
+            f.write(vk_func.thunk(prefix="thunk32_", conv=vk_func.thunk_type == ThunkType.PUBLIC))
+            f.write("#endif /* USE_STRUCT_CONVERSION */\n\n")
 
         # Create array of device extensions.
         f.write("static const char * const vk_device_extensions[] =\n{\n")
@@ -2827,6 +2806,8 @@ class VkGenerator(object):
         f.write("    }\n")
         f.write("}\n\n")
 
+        f.write("#if !defined(USE_STRUCT_CONVERSION)\n\n")
+
         f.write("const unixlib_entry_t __wine_unix_call_funcs[] =\n")
         f.write("{\n")
         f.write("    init_vulkan,\n")
@@ -2838,9 +2819,28 @@ class VkGenerator(object):
             if vk_func.loader_thunk_type == ThunkType.NONE:
                 continue
 
-            f.write("    {1}{0},\n".format(vk_func.name, prefix))
+            f.write("    {1}{0},\n".format(vk_func.name, "thunk64_"))
         f.write("};\n")
         f.write("C_ASSERT(ARRAYSIZE(__wine_unix_call_funcs) == unix_count);\n\n")
+
+        f.write("#else /* USE_STRUCT_CONVERSION) */\n\n")
+
+        f.write("const unixlib_entry_t __wine_unix_call_funcs[] =\n")
+        f.write("{\n")
+        f.write("    init_vulkan,\n")
+        f.write("    vk_is_available_instance_function,\n")
+        f.write("    vk_is_available_device_function,\n")
+        for vk_func in self.registry.funcs.values():
+            if not vk_func.needs_exposing():
+                continue
+            if vk_func.loader_thunk_type == ThunkType.NONE:
+                continue
+
+            f.write("    {1}{0},\n".format(vk_func.name, "thunk32_"))
+        f.write("};\n")
+        f.write("C_ASSERT(ARRAYSIZE(__wine_unix_call_funcs) == unix_count);\n\n")
+
+        f.write("#endif /* USE_STRUCT_CONVERSION) */\n\n")
 
         f.write("NTSTATUS WINAPI vk_direct_unix_call(unixlib_handle_t handle, unsigned int code, void *params)\n")
         f.write("{\n")
@@ -2863,7 +2863,7 @@ class VkGenerator(object):
             if vk_func.needs_thunk() and not vk_func.needs_private_thunk():
                 continue
 
-            f.write("NTSTATUS {0}{1}(void *args) DECLSPEC_HIDDEN;\n".format(prefix, vk_func.name))
+            f.write("{0};\n".format(vk_func.prototype(prefix=prefix, postfix="DECLSPEC_HIDDEN", is_thunk=True)))
         f.write("\n")
 
         f.write("/* Private thunks */\n")
@@ -3895,7 +3895,7 @@ def main():
         generator.generate_thunks_h(f, "wine_")
 
     with open(WINE_VULKAN_THUNKS_C, "w") as f:
-        generator.generate_thunks_c(f, "wine_")
+        generator.generate_thunks_c(f)
 
     with open(WINE_VULKAN_LOADER_THUNKS_H, "w") as f:
         generator.generate_loader_thunks_h(f)

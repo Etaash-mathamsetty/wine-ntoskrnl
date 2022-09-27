@@ -2812,8 +2812,8 @@ PVOID WINAPI MmAllocateContiguousMemorySpecifyCache( SIZE_T size,
  */
 PVOID WINAPI MmAllocateContiguousMemory( SIZE_T size, PHYSICAL_ADDRESS highest_valid_address )
 {
-    FIXME( "%Iu, %s semi-stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
     PHYSICAL_ADDRESS zero_addr;
+    FIXME( "%Iu, %s semi-stub\n", size, wine_dbgstr_longlong(highest_valid_address.QuadPart) );
     zero_addr.QuadPart = 0;
     return MmAllocateContiguousMemorySpecifyCache(size, zero_addr, highest_valid_address, zero_addr, MmNonCached);
 }
@@ -2909,11 +2909,72 @@ VOID WINAPI MmLockPagableSectionByHandle(PVOID ImageSectionHandle)
 /***********************************************************************
  *           MmMapLockedPagesSpecifyCache  (NTOSKRNL.EXE.@)
  */
-PVOID WINAPI  MmMapLockedPagesSpecifyCache(PMDLX MemoryDescriptorList, KPROCESSOR_MODE AccessMode, MEMORY_CACHING_TYPE CacheType,
+PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDLX mdl, KPROCESSOR_MODE AccessMode, MEMORY_CACHING_TYPE CacheType,
                                            PVOID BaseAddress, ULONG BugCheckOnFailure, MM_PAGE_PRIORITY Priority)
 {
-    FIXME("(%p, %u, %u, %p, %lu, %u): stub\n", MemoryDescriptorList, AccessMode, CacheType, BaseAddress, BugCheckOnFailure, Priority);
+    DWORD protect = PAGE_READWRITE;
+    PVOID* addr = NULL;
+    PVOID* store_addr;
+    HANDLE hProcess = NULL;
 
+    FIXME("(%p, %u, %u, %p, %lu, %u): semi-stub\n", mdl, AccessMode, CacheType, BaseAddress, BugCheckOnFailure, Priority);
+
+    if (!mdl)
+    {
+        FIXME("FAILURE %d", __LINE__);
+        return NULL;
+    }
+
+    if (AccessMode)
+    {
+        FIXME("User mode mapping is not supported!\n");
+        return NULL;
+    }
+
+    switch (CacheType)
+    {
+        case MmNonCached:
+            protect |= PAGE_NOCACHE;
+            break;
+        case MmWriteCombined:
+            protect |= PAGE_WRITECOMBINE;
+            break;
+        default:
+            break;
+    }
+
+    addr = VirtualAlloc(NULL, mdl->ByteCount, MEM_COMMIT|MEM_RESERVE, protect);
+
+    if(!addr)
+    {
+        FIXME("FAILURE %d\n", __LINE__);
+        return NULL;
+    }
+
+    if(mdl->Process)
+        hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, mdl->Process->info.UniqueProcessId);
+    else
+        hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetCurrentProcessId());
+
+    //FIXME("hProcess %p\n", hProcess);
+
+    if(!hProcess)
+        goto out;
+
+    if(!ReadProcessMemory(hProcess, (char*)mdl->StartVa + mdl->ByteOffset, addr, mdl->ByteCount, NULL))
+        goto out;
+
+    store_addr = (PVOID*)((char*) mdl + sizeof(MDL));
+    *store_addr = addr;
+
+    CloseHandle(hProcess);
+    return addr;
+
+out:
+    FIXME("Failure!\n");
+    VirtualFree(addr, mdl->ByteCount, MEM_RELEASE);
+    if(hProcess) CloseHandle(hProcess);
+    if(BugCheckOnFailure) KeBugCheck(1);
     return NULL;
 }
 
@@ -2964,9 +3025,36 @@ void WINAPI MmResetDriverPaging(PVOID AddrInSection)
 /***********************************************************************
  *           MmUnlockPages  (NTOSKRNL.EXE.@)
  */
-void WINAPI  MmUnlockPages(PMDLX MemoryDescriptorList)
+void WINAPI  MmUnlockPages(PMDLX mdl)
 {
-    FIXME("(%p): stub\n", MemoryDescriptorList);
+    PVOID* addr = NULL;
+    HANDLE hProcess;
+    PVOID* store_addr = (PVOID*) ((char*)mdl + sizeof(MDL));
+
+    if(!mdl)
+        return;
+
+    FIXME("(%p)\n", mdl);
+
+    addr = *store_addr;
+    if(!addr)
+        return;
+
+    if(mdl->Process)
+        hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, mdl->Process->info.UniqueProcessId);
+    else
+        hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetCurrentProcessId());
+
+    if(hProcess)
+    {
+        WriteProcessMemory(hProcess, (char*)mdl->StartVa + mdl->ByteOffset, addr, mdl->ByteCount, NULL);
+        CloseHandle(hProcess);
+    }
+
+    VirtualFree(addr, mdl->ByteCount, MEM_RELEASE);
+    *store_addr = NULL;
+
+    return;
 }
 
 

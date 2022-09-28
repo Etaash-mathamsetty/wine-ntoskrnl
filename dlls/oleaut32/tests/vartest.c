@@ -246,10 +246,10 @@ typedef struct IRecordInfoImpl
 {
     IRecordInfo IRecordInfo_iface;
     LONG ref;
-    void *validsrc;
     unsigned int recordclear;
     unsigned int getsize;
     unsigned int recordcopy;
+    struct __tagBRECORD *rec;
 } IRecordInfoImpl;
 
 static inline IRecordInfoImpl *impl_from_IRecordInfo(IRecordInfo *iface)
@@ -299,8 +299,7 @@ static HRESULT WINAPI RecordInfo_RecordClear(IRecordInfo *iface, void *data)
 {
     IRecordInfoImpl* This = impl_from_IRecordInfo(iface);
     This->recordclear++;
-    if(data == This->validsrc)
-        This->validsrc = NULL; /* not valid anymore, now that it's been cleared */
+    This->rec->pvRecord = NULL;
     return S_OK;
 }
 
@@ -308,7 +307,7 @@ static HRESULT WINAPI RecordInfo_RecordCopy(IRecordInfo *iface, void *src, void 
 {
     IRecordInfoImpl* This = impl_from_IRecordInfo(iface);
     This->recordcopy++;
-    ok(This->validsrc && (src == This->validsrc), "wrong src pointer %p\n", src);
+    ok(src == (void*)0xdeadbeef, "wrong src pointer %p\n", src);
     return S_OK;
 }
 
@@ -431,7 +430,6 @@ static IRecordInfoImpl *get_test_recordinfo(void)
     rec->recordclear = 0;
     rec->getsize = 0;
     rec->recordcopy = 0;
-    rec->validsrc = (void *)0xdeadbeef;
 
     return rec;
 }
@@ -769,6 +767,7 @@ static test_VariantClearImpl test_myVariantClearImpl = {{&test_VariantClear_vtbl
 
 static void test_VariantClear(void)
 {
+  struct __tagBRECORD *rec;
   IRecordInfoImpl *recinfo;
   HRESULT hres;
   VARIANTARG v;
@@ -893,32 +892,23 @@ static void test_VariantClear(void)
   /* RECORD */
   recinfo = get_test_recordinfo();
   V_VT(&v) = VT_RECORD;
-  V_RECORDINFO(&v) = &recinfo->IRecordInfo_iface;
-  V_RECORD(&v) = recinfo->validsrc;
+  rec = &V_UNION(&v, brecVal);
+  rec->pRecInfo = &recinfo->IRecordInfo_iface;
+  rec->pvRecord = (void*)0xdeadbeef;
   recinfo->recordclear = 0;
   recinfo->ref = 2;
+  recinfo->rec = rec;
   hres = VariantClear(&v);
   ok(hres == S_OK, "ret %08lx\n", hres);
+  ok(rec->pvRecord == NULL, "got %p\n", rec->pvRecord);
   ok(recinfo->recordclear == 1, "got %d\n", recinfo->recordclear);
-  ok(recinfo->ref == 1, "got %ld\n", recinfo->ref);
-  IRecordInfo_Release(&recinfo->IRecordInfo_iface);
-
-  /* RECORD BYREF */
-  recinfo = get_test_recordinfo();
-  V_VT(&v) = VT_RECORD|VT_BYREF;
-  V_RECORDINFO(&v) = &recinfo->IRecordInfo_iface;
-  V_RECORD(&v) = recinfo->validsrc;
-  hres = VariantClear(&v);
-  ok(hres == S_OK, "ret %08lx\n", hres);
-  ok(V_VT(&v) == VT_EMPTY, "got vt = %d",V_VT(&v));
-  /* BYREF does not own the pointed-to V_RECORD/INFO, so no RecordClear and no Release */
-  ok(recinfo->recordclear == 0, "got %d\n", recinfo->recordclear);
   ok(recinfo->ref == 1, "got %ld\n", recinfo->ref);
   IRecordInfo_Release(&recinfo->IRecordInfo_iface);
 }
 
 static void test_VariantCopy(void)
 {
+  struct __tagBRECORD *rec;
   IRecordInfoImpl *recinfo;
   VARIANTARG vSrc, vDst;
   VARTYPE vt;
@@ -1043,17 +1033,20 @@ static void test_VariantCopy(void)
   V_VT(&vDst) = VT_EMPTY;
 
   V_VT(&vSrc) = VT_RECORD;
-  V_RECORDINFO(&vSrc) = &recinfo->IRecordInfo_iface;
-  V_RECORD(&vSrc) = recinfo->validsrc;
+  rec = &V_UNION(&vSrc, brecVal);
+  rec->pRecInfo = &recinfo->IRecordInfo_iface;
+  rec->pvRecord = (void*)0xdeadbeef;
 
   recinfo->recordclear = 0;
   recinfo->recordcopy = 0;
   recinfo->getsize = 0;
+  recinfo->rec = rec;
   hres = VariantCopy(&vDst, &vSrc);
   ok(hres == S_OK, "ret %08lx\n", hres);
 
-  ok(V_RECORD(&vDst) != recinfo->validsrc && V_RECORD(&vDst) != NULL, "got %p\n", V_RECORD(&vDst));
-  ok(V_RECORDINFO(&vDst) == &recinfo->IRecordInfo_iface, "got %p\n", V_RECORDINFO(&vDst));
+  rec = &V_UNION(&vDst, brecVal);
+  ok(rec->pvRecord != (void*)0xdeadbeef && rec->pvRecord != NULL, "got %p\n", rec->pvRecord);
+  ok(rec->pRecInfo == &recinfo->IRecordInfo_iface, "got %p\n", rec->pRecInfo);
   ok(recinfo->getsize == 1, "got %d\n", recinfo->recordclear);
   ok(recinfo->recordcopy == 1, "got %d\n", recinfo->recordclear);
 
@@ -1082,7 +1075,6 @@ static void test_VariantCopyInd(void)
   size_t i;
   BYTE buffer[64];
   HRESULT hres, hExpected;
-  IRecordInfoImpl *recinfo;
 
   memset(buffer, 0, sizeof(buffer));
 
@@ -1273,52 +1265,6 @@ static void test_VariantCopyInd(void)
   hres = VariantCopyInd(&vDst, &vSrc);
   ok(hres == E_INVALIDARG,
      "CopyInd(ref->ref): expected E_INVALIDARG, got 0x%08lx\n", hres);
-
-  /* source data for a deep-copy of VT_BYREF|VT_RECORD... */
-  recinfo = get_test_recordinfo();
-  V_VT(&vSrc) = VT_RECORD|VT_BYREF;
-  V_RECORDINFO(&vSrc) = &recinfo->IRecordInfo_iface;
-  V_RECORD(&vSrc) = recinfo->validsrc;
-
-  /* into a separate vDst */
-  VariantInit(&vDst);
-  hres = VariantCopyInd(&vDst, &vSrc);
-  ok(hres == S_OK, "VariantCopyInd failed: 0x%08lx\n", hres);
-  ok(V_VT(&vDst) == VT_RECORD, "got vt = %d|0x%X\n", V_VT(&vDst) & VT_TYPEMASK, V_VT(&vDst) & ~VT_TYPEMASK);
-  ok(V_RECORDINFO(&vDst) == &recinfo->IRecordInfo_iface, "got %p\n", V_RECORDINFO(&vDst));
-  ok(recinfo->recordclear == 0,"got %d\n", recinfo->recordclear);
-  ok(V_RECORD(&vDst) != recinfo->validsrc, "expected a newly-allocated deep copy\n");
-  ok(recinfo->getsize == 1,"got %d\n", recinfo->getsize);
-  ok(recinfo->recordcopy == 1,"got %d\n", recinfo->recordcopy);
-  ok(recinfo->ref == 2,"got %ld\n", recinfo->ref);
-
-  VariantClear(&vDst);
-  ok(recinfo->ref == 1,"got %ld\n", recinfo->ref);
-  ok(recinfo->recordclear == 1,"got %d\n", recinfo->recordclear);
-
-  recinfo->getsize = 0;
-  recinfo->recordcopy = 0;
-  recinfo->recordclear = 0;
-
-  /* and also in-place */
-  hres = VariantCopyInd(&vSrc, &vSrc);
-  ok(V_VT(&vSrc) == VT_RECORD, "got vt = %d|0x%X\n", V_VT(&vSrc) & VT_TYPEMASK, V_VT(&vSrc) & ~VT_TYPEMASK);
-  ok(V_RECORDINFO(&vSrc) == &recinfo->IRecordInfo_iface, "got %p\n", V_RECORDINFO(&vSrc));
-  /* ++ref and no RecordClear, since the source BYREF does not own the V_RECORD/INFO
-   * which it pointed to, and thus did not free them when overwritten */
-  ok(recinfo->ref == 2,"got %ld\n", recinfo->ref);
-  ok(recinfo->recordclear == 0,"got %d\n", recinfo->recordclear);
-
-  ok(V_RECORD(&vDst) != recinfo->validsrc, "expected a newly-allocated deep copy\n");
-  ok(recinfo->getsize == 1,"got %d\n", recinfo->getsize);
-  ok(recinfo->recordcopy == 1,"got %d\n", recinfo->recordcopy);
-
-  /* but the no-longer-BYREF output owns and will free its copies */
-  VariantClear(&vSrc);
-  ok(recinfo->ref == 1,"got %ld\n", recinfo->ref);
-  ok(recinfo->recordclear == 1,"got %d\n", recinfo->recordclear);
-
-  IRecordInfo_Release(&recinfo->IRecordInfo_iface);
 }
 
 static HRESULT (WINAPI *pVarParseNumFromStr)(const OLECHAR*,LCID,ULONG,NUMPARSE*,BYTE*);

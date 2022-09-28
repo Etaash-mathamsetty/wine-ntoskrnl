@@ -5,9 +5,10 @@ InitializeSynchronizationBarrier
 EnterSynchronizationBarrier
 DeleteSynchronizationBarrier
 KeIpiGenericCall
-SeExports (an export, I already have a patch for this)
 I had a big brain time moment and realized that I need to implement support for the parity flag (PF) in my instruction emulation code, 
 once that's done, I will add it here (this might be all I need to get vanguard to work)
+implementing PF, SF, and OF didn't seem to help, but I still have to implement AF, so once that's done I will attempt it again
+it also seems that the INT instruction needs to be emulated
 
 wine bugs fixed (probably):
 https://bugs.winehq.org/show_bug.cgi?id=49394

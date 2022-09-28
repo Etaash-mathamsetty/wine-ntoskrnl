@@ -1339,7 +1339,7 @@
 @ stub SeDeassignSecurity
 @ stub SeDeleteAccessState
 @ stub SeDeleteObjectAuditAlarm
-@ stub SeExports
+@ extern SeExports
 @ stub SeFilterToken
 @ stub SeFreePrivileges
 @ stub SeImpersonateClient

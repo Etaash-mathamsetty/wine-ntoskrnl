@@ -1534,6 +1534,76 @@ static struct _OBJECT_TYPE driver_type =
 
 POBJECT_TYPE IoDriverObjectType = &driver_type;
 
+static SE_EXPORTS se_exports = {0};
+PSE_EXPORTS SeExports = &se_exports;
+
+static void init_se_exports()
+{
+    se_exports.SeNullSid = &well_known_sids[0];
+    se_exports.SeWorldSid = &well_known_sids[1];
+    se_exports.SeLocalSid = &well_known_sids[2];
+    se_exports.SeCreatorOwnerSid = &well_known_sids[3];
+    se_exports.SeCreatorGroupSid = &well_known_sids[4];
+
+    se_exports.SeNtAuthoritySid = &well_known_sids[8];
+    se_exports.SeDialupSid = &well_known_sids[9];
+    se_exports.SeNetworkSid = &well_known_sids[10];
+    se_exports.SeBatchSid = &well_known_sids[11];
+    se_exports.SeInteractiveSid = &well_known_sids[12];
+
+    se_exports.SeAnonymousLogonSid = &well_known_sids[14];
+
+    se_exports.SeAuthenticatedUsersSid = &well_known_sids[18];
+    se_exports.SeRestrictedSid = &well_known_sids[19];
+
+    se_exports.SeLocalSystemSid = &well_known_sids[23];
+    se_exports.SeLocalServiceSid = &well_known_sids[24];
+    se_exports.SeNetworkServiceSid = &well_known_sids[25];
+    
+    se_exports.SeAliasAdminsSid = &well_known_sids[27];
+    se_exports.SeAliasUsersSid = &well_known_sids[28];
+    se_exports.SeAliasGuestsSid = &well_known_sids[29];
+    se_exports.SeAliasPowerUsersSid = &well_known_sids[30];
+    se_exports.SeAliasAccountOpsSid = &well_known_sids[31];
+    se_exports.SeAliasSystemOpsSid = &well_known_sids[32];
+    se_exports.SeAliasPrintOpsSid = &well_known_sids[33];
+    se_exports.SeAliasBackupOpsSid = &well_known_sids[34];
+
+    se_exports.SeLowMandatorySid = &well_known_sids[50];
+    se_exports.SeMediumMandatorySid = &well_known_sids[51];
+    se_exports.SeHighMandatorySid = &well_known_sids[52];
+    se_exports.SeSystemMandatorySid = &well_known_sids[53];
+
+    se_exports.SeCreateTokenPrivilege = SeCreateTokenPrivilege;
+    se_exports.SeAssignPrimaryTokenPrivilege = SeAssignPrimaryTokenPrivilege;
+    se_exports.SeLockMemoryPrivilege = SeLockMemoryPrivilege;
+    se_exports.SeIncreaseQuotaPrivilege = SeIncreaseQuotaPrivilege;
+    se_exports.SeUnsolicitedInputPrivilege = SeUnsolicitedInputPrivilege;
+    se_exports.SeTcbPrivilege = SeTcbPrivilege;
+    se_exports.SeSecurityPrivilege = SeSecurityPrivilege;
+    se_exports.SeTakeOwnershipPrivilege = SeTakeOwnershipPrivilege;
+    se_exports.SeLoadDriverPrivilege = SeLoadDriverPrivilege;
+    se_exports.SeSystemProfilePrivilege = SeSystemProfilePrivilege;
+    se_exports.SeSystemtimePrivilege = SeSystemtimePrivilege;
+    se_exports.SeProfileSingleProcessPrivilege = SeProfileSingleProcessPrivilege;
+    se_exports.SeIncreaseBasePriorityPrivilege = SeIncreaseBasePriorityPrivilege;
+    se_exports.SeCreatePagefilePrivilege = SeCreatePagefilePrivilege;
+    se_exports.SeCreatePermanentPrivilege = SeCreatePermanentPrivilege;
+    se_exports.SeBackupPrivilege = SeBackupPrivilege;
+    se_exports.SeRestorePrivilege = SeRestorePrivilege;
+    se_exports.SeShutdownPrivilege = SeShutdownPrivilege;
+    se_exports.SeDebugPrivilege = SeDebugPrivilege;
+    se_exports.SeAuditPrivilege = SeAuditPrivilege;
+    se_exports.SeRemoteShutdownPrivilege = SeRemoteShutdownPrivilege;
+    se_exports.SeChangeNotifyPrivilege = SeChangeNotifyPrivilege;
+    se_exports.SeUndockPrivilege = SeUndockPrivilege;
+    se_exports.SeSyncAgentPrivilege = SeSyncAgentPrivilege;
+    se_exports.SeEnableDelegationPrivilege = SeEnableDelegationPrivilege;
+    se_exports.SeManageVolumePrivilege = SeManageVolumePrivilege;
+    se_exports.SeImpersonatePrivilege = SeImpersonatePrivilege;
+    se_exports.SeCreateGlobalPrivilege = SeCreateGlobalPrivilege;   
+}
+
 
 /***********************************************************************
  *           IoCreateDriver   (NTOSKRNL.EXE.@)
@@ -4705,7 +4775,8 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
         ntoskrnl_heap = HeapCreate( HEAP_CREATE_ENABLE_EXECUTE, 0, 0 );
         dpc_call_tls_index = TlsAlloc();
         LdrRegisterDllNotification( 0, ldr_notify_callback, NULL, &ldr_notify_cookie );
-        KeNumberProcessors = (CCHAR) KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+        KeNumberProcessors = (CCHAR) min(127UL, KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS));
+        init_se_exports();
         break;
     case DLL_PROCESS_DETACH:
         LdrUnregisterDllNotification( ldr_notify_cookie );

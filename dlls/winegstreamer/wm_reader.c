@@ -1573,9 +1573,10 @@ HRESULT wm_reader_get_stream_sample(struct wm_reader *reader, IWMReaderCallbackA
     struct wg_parser_stream *wg_stream;
     struct wg_parser_buffer wg_buffer;
     struct wm_stream *stream;
+    struct buffer *object;
     DWORD size, capacity;
     INSSBuffer *sample;
-    HRESULT hr;
+    HRESULT hr = S_OK;
     BYTE *data;
 
     for (;;)
@@ -1619,43 +1620,36 @@ HRESULT wm_reader_get_stream_sample(struct wm_reader *reader, IWMReaderCallbackA
 
         TRACE("Got buffer for '%s' stream %p.\n", get_major_type_string(stream->format.major_type), stream);
 
-        if (callback_advanced && stream->read_compressed && stream->allocate_stream)
-        {
-            if (FAILED(hr = IWMReaderCallbackAdvanced_AllocateForStream(callback_advanced,
-                    stream->index + 1, wg_buffer.size, &sample, NULL)))
-            {
-                ERR("Failed to allocate stream sample of %u bytes, hr %#lx.\n", wg_buffer.size, hr);
-                wg_parser_stream_release_buffer(wg_stream);
-                return hr;
-            }
-        }
+        if (!stream->read_compressed && stream->output_allocator)
+            hr = IWMReaderAllocatorEx_AllocateForOutputEx(stream->output_allocator, stream->index,
+                    wg_buffer.size, &sample, 0, 0, 0, NULL);
+        else if (stream->read_compressed && stream->stream_allocator)
+            hr = IWMReaderAllocatorEx_AllocateForStreamEx(stream->stream_allocator, stream->index + 1,
+                    wg_buffer.size, &sample, 0, 0, 0, NULL);
+        else if (callback_advanced && stream->read_compressed && stream->allocate_stream)
+            hr = IWMReaderCallbackAdvanced_AllocateForStream(callback_advanced,
+                    stream->index + 1, wg_buffer.size, &sample, NULL);
         else if (callback_advanced && !stream->read_compressed && stream->allocate_output)
-        {
-            if (FAILED(hr = IWMReaderCallbackAdvanced_AllocateForOutput(callback_advanced,
-                    stream->index, wg_buffer.size, &sample, NULL)))
-            {
-                ERR("Failed to allocate output sample of %u bytes, hr %#lx.\n", wg_buffer.size, hr);
-                wg_parser_stream_release_buffer(wg_stream);
-                return hr;
-            }
-        }
+            hr = IWMReaderCallbackAdvanced_AllocateForOutput(callback_advanced,
+                    stream->index, wg_buffer.size, &sample, NULL);
+        /* FIXME: Should these be pooled? */
+        else if (!(object = calloc(1, offsetof(struct buffer, data[wg_buffer.size]))))
+            hr = E_OUTOFMEMORY;
         else
         {
-            struct buffer *object;
-
-            /* FIXME: Should these be pooled? */
-            if (!(object = calloc(1, offsetof(struct buffer, data[wg_buffer.size]))))
-            {
-                wg_parser_stream_release_buffer(wg_stream);
-                return E_OUTOFMEMORY;
-            }
-
             object->INSSBuffer_iface.lpVtbl = &buffer_vtbl;
             object->refcount = 1;
             object->capacity = wg_buffer.size;
 
             TRACE("Created buffer %p.\n", object);
             sample = &object->INSSBuffer_iface;
+        }
+
+        if (FAILED(hr))
+        {
+            ERR("Failed to allocate sample of %u bytes, hr %#lx.\n", wg_buffer.size, hr);
+            wg_parser_stream_release_buffer(wg_stream);
+            return hr;
         }
 
         if (FAILED(hr = INSSBuffer_GetBufferAndLength(sample, &data, &size)))
@@ -2429,32 +2423,103 @@ static HRESULT WINAPI reader_SetRangeByFrameEx(IWMSyncReader2 *iface, WORD strea
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI reader_SetAllocateForOutput(IWMSyncReader2 *iface, DWORD output_num, IWMReaderAllocatorEx *allocator)
+static HRESULT WINAPI reader_SetAllocateForOutput(IWMSyncReader2 *iface, DWORD output, IWMReaderAllocatorEx *allocator)
 {
-    struct wm_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%lu %p): stub!\n", This, output_num, allocator);
-    return E_NOTIMPL;
+    struct wm_reader *reader = impl_from_IWMSyncReader2(iface);
+    struct wm_stream *stream;
+
+    TRACE("reader %p, output %lu, allocator %p.\n", reader, output, allocator);
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = get_stream_by_output_number(reader, output)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    if (stream->output_allocator)
+        IWMReaderAllocatorEx_Release(stream->output_allocator);
+    if ((stream->output_allocator = allocator))
+        IWMReaderAllocatorEx_AddRef(stream->output_allocator);
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
 }
 
-static HRESULT WINAPI reader_GetAllocateForOutput(IWMSyncReader2 *iface, DWORD output_num, IWMReaderAllocatorEx **allocator)
+static HRESULT WINAPI reader_GetAllocateForOutput(IWMSyncReader2 *iface, DWORD output, IWMReaderAllocatorEx **allocator)
 {
-    struct wm_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%lu %p): stub!\n", This, output_num, allocator);
-    return E_NOTIMPL;
+    struct wm_reader *reader = impl_from_IWMSyncReader2(iface);
+    struct wm_stream *stream;
+
+    TRACE("reader %p, output %lu, allocator %p.\n", reader, output, allocator);
+
+    if (!allocator)
+        return E_INVALIDARG;
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = get_stream_by_output_number(reader, output)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    stream = reader->streams + output;
+    if ((*allocator = stream->output_allocator))
+        IWMReaderAllocatorEx_AddRef(*allocator);
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
 }
 
-static HRESULT WINAPI reader_SetAllocateForStream(IWMSyncReader2 *iface, DWORD stream_num, IWMReaderAllocatorEx *allocator)
+static HRESULT WINAPI reader_SetAllocateForStream(IWMSyncReader2 *iface, DWORD stream_number, IWMReaderAllocatorEx *allocator)
 {
-    struct wm_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%lu %p): stub!\n", This, stream_num, allocator);
-    return E_NOTIMPL;
+    struct wm_reader *reader = impl_from_IWMSyncReader2(iface);
+    struct wm_stream *stream;
+
+    TRACE("reader %p, stream_number %lu, allocator %p.\n", reader, stream_number, allocator);
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = wm_reader_get_stream_by_stream_number(reader, stream_number)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    if (stream->stream_allocator)
+        IWMReaderAllocatorEx_Release(stream->stream_allocator);
+    if ((stream->stream_allocator = allocator))
+        IWMReaderAllocatorEx_AddRef(stream->stream_allocator);
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
 }
 
-static HRESULT WINAPI reader_GetAllocateForStream(IWMSyncReader2 *iface, DWORD stream_num, IWMReaderAllocatorEx **allocator)
+static HRESULT WINAPI reader_GetAllocateForStream(IWMSyncReader2 *iface, DWORD stream_number, IWMReaderAllocatorEx **allocator)
 {
-    struct wm_reader *This = impl_from_IWMSyncReader2(iface);
-    FIXME("(%p)->(%lu %p): stub!\n", This, stream_num, allocator);
-    return E_NOTIMPL;
+    struct wm_reader *reader = impl_from_IWMSyncReader2(iface);
+    struct wm_stream *stream;
+
+    TRACE("reader %p, stream_number %lu, allocator %p.\n", reader, stream_number, allocator);
+
+    if (!allocator)
+        return E_INVALIDARG;
+
+    EnterCriticalSection(&reader->cs);
+
+    if (!(stream = wm_reader_get_stream_by_stream_number(reader, stream_number)))
+    {
+        LeaveCriticalSection(&reader->cs);
+        return E_INVALIDARG;
+    }
+
+    if ((*allocator = stream->stream_allocator))
+        IWMReaderAllocatorEx_AddRef(*allocator);
+
+    LeaveCriticalSection(&reader->cs);
+    return S_OK;
 }
 
 static const IWMSyncReader2Vtbl reader_vtbl =

@@ -2248,16 +2248,51 @@ static HRESULT WINAPI callback_allocator_AllocateForStreamEx(IWMReaderAllocatorE
         WORD stream_number, DWORD size, INSSBuffer **sample, DWORD flags,
         QWORD pts, QWORD duration, void *context)
 {
-    ok(0, "Unexpected call.\n");
-    return E_NOTIMPL;
+    struct callback *callback = impl_from_IWMReaderAllocatorEx(iface);
+    struct buffer *object;
+
+    ok(callback->allocated_samples, "Unexpected call.\n");
+    ok(stream_number, "got stream_number %u.\n", stream_number);
+    ok(!flags, "got flags %#lx.\n", flags);
+    ok(!pts, "got pts %I64d.\n", pts);
+    ok(!duration, "got duration %I64d.\n", duration);
+    ok(!context, "got context %p.\n", context);
+
+    if (!(object = malloc(offsetof(struct buffer, data[size]))))
+        return E_OUTOFMEMORY;
+    object->INSSBuffer_iface.lpVtbl = &buffer_vtbl;
+    object->refcount = 1;
+    object->capacity = size;
+    object->size = size;
+
+    *sample = &object->INSSBuffer_iface;
+    InterlockedIncrement(&outstanding_buffers);
+    return S_OK;
 }
 
 static HRESULT WINAPI callback_allocator_AllocateForOutputEx(IWMReaderAllocatorEx *iface,
         DWORD output, DWORD size, INSSBuffer **sample, DWORD flags,
         QWORD pts, QWORD duration, void *context)
 {
-    ok(0, "Unexpected call.\n");
-    return E_NOTIMPL;
+    struct callback *callback = impl_from_IWMReaderAllocatorEx(iface);
+    struct buffer *object;
+
+    ok(callback->allocated_samples, "Unexpected call.\n");
+    ok(!flags, "got flags %#lx.\n", flags);
+    ok(!pts, "got pts %I64d.\n", pts);
+    ok(!duration, "got duration %I64d.\n", duration);
+    ok(!context, "got context %p.\n", context);
+
+    if (!(object = malloc(offsetof(struct buffer, data[size]))))
+        return E_OUTOFMEMORY;
+    object->INSSBuffer_iface.lpVtbl = &buffer_vtbl;
+    object->refcount = 1;
+    object->capacity = size;
+    object->size = size;
+
+    *sample = &object->INSSBuffer_iface;
+    InterlockedIncrement(&outstanding_buffers);
+    return S_OK;
 }
 
 static const IWMReaderAllocatorExVtbl callback_allocator_vtbl =
@@ -3413,6 +3448,204 @@ static void test_async_reader_file(void)
     ok(ret, "Failed to delete %s, error %lu.\n", debugstr_w(filename), GetLastError());
 }
 
+static void test_sync_reader_allocator(void)
+{
+    const WCHAR *filename = load_resource(L"test.wmv");
+    IWMReaderAllocatorEx *allocator;
+    struct teststream stream;
+    struct callback callback;
+    DWORD output_num, flags;
+    IWMSyncReader2 *reader;
+    QWORD pts, duration;
+    INSSBuffer *sample;
+    WORD stream_num;
+    HANDLE file;
+    HRESULT hr;
+    BOOL ret;
+
+    callback_init(&callback);
+
+    hr = WMCreateSyncReader(NULL, 0, (IWMSyncReader **)&reader);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    file = CreateFileW(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, 0);
+    ok(file != INVALID_HANDLE_VALUE, "Failed to open %s, error %lu.\n", debugstr_w(file), GetLastError());
+
+    teststream_init(&stream, file);
+
+    hr = IWMSyncReader2_OpenStream(reader, &stream.IStream_iface);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(stream.refcount > 1, "Got refcount %ld.\n", stream.refcount);
+
+
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, -1, &allocator);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 0, &allocator);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 0, NULL);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 1, NULL);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForOutput(reader, -1, &callback.IWMReaderAllocatorEx_iface);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForStream(reader, 0, &callback.IWMReaderAllocatorEx_iface);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+
+
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 0, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 1, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+
+
+    hr = IWMSyncReader2_SetAllocateForStream(reader, 1, &callback.IWMReaderAllocatorEx_iface);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 0, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 2, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 1, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(allocator == &callback.IWMReaderAllocatorEx_iface, "Got allocator %p.\n", allocator);
+
+    hr = IWMSyncReader2_SetAllocateForStream(reader, 1, NULL);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 0, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 1, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+
+
+    hr = IWMSyncReader2_SetAllocateForOutput(reader, 0, &callback.IWMReaderAllocatorEx_iface);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 1, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 1, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 0, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(allocator == &callback.IWMReaderAllocatorEx_iface, "Got allocator %p.\n", allocator);
+
+    hr = IWMSyncReader2_SetAllocateForOutput(reader, 0, NULL);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForOutput(reader, 0, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+    allocator = (void *)0xdeadbeef;
+    hr = IWMSyncReader2_GetAllocateForStream(reader, 1, &allocator);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocator, "Got allocator %p.\n", allocator);
+
+
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 0, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForStream(reader, stream_num, &callback.IWMReaderAllocatorEx_iface);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetReadStreamSamples(reader, stream_num, TRUE);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForOutput(reader, 1, &callback.IWMReaderAllocatorEx_iface);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    callback.allocated_samples = true;
+
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 0, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetNextSample(reader, stream_num, &sample, &pts, &duration, &flags,
+            &output_num, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(sample->lpVtbl == &buffer_vtbl, "Buffer vtbl didn't match.\n");
+    INSSBuffer_Release(sample);
+
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 1, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetNextSample(reader, stream_num, &sample, &pts, &duration, &flags,
+            &output_num, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(sample->lpVtbl == &buffer_vtbl, "Buffer vtbl didn't match.\n");
+    INSSBuffer_Release(sample);
+
+    callback.allocated_samples = false;
+
+
+    /* without compressed sample read, allocator isn't used */
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 0, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetReadStreamSamples(reader, stream_num, FALSE);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetNextSample(reader, stream_num, &sample, &pts, &duration, &flags,
+            &output_num, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(sample->lpVtbl != &buffer_vtbl, "Unexpected buffer vtbl.\n");
+    INSSBuffer_Release(sample);
+
+
+    /* cannot change or remove allocators after they've been used */
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 0, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForStream(reader, stream_num, NULL);
+    todo_wine
+    ok(hr == NS_E_INVALID_REQUEST, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForOutput(reader, 0, &callback.IWMReaderAllocatorEx_iface);
+    todo_wine
+    ok(hr == NS_E_INVALID_REQUEST, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetAllocateForOutput(reader, 1, NULL);
+    todo_wine
+    ok(hr == NS_E_INVALID_REQUEST, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 0, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_SetReadStreamSamples(reader, stream_num, TRUE);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    callback.allocated_samples = true;
+
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 1, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetNextSample(reader, stream_num, &sample, &pts, &duration, &flags,
+            &output_num, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    todo_wine
+    ok(sample->lpVtbl == &buffer_vtbl, "Buffer vtbl didn't match.\n");
+    INSSBuffer_Release(sample);
+
+    hr = IWMSyncReader2_GetStreamNumberForOutput(reader, 0, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = IWMSyncReader2_GetNextSample(reader, stream_num, &sample, &pts, &duration, &flags,
+            &output_num, &stream_num);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    todo_wine
+    ok(sample->lpVtbl == &buffer_vtbl, "Unexpected buffer vtbl.\n");
+    INSSBuffer_Release(sample);
+
+    callback.allocated_samples = false;
+
+
+    IWMSyncReader2_Release(reader);
+
+    ok(stream.refcount == 1, "Got outstanding refcount %ld.\n", stream.refcount);
+    CloseHandle(stream.file);
+    ret = DeleteFileW(filename);
+    ok(ret, "Failed to delete %s, error %lu.\n", debugstr_w(filename), GetLastError());
+
+    callback_cleanup(&callback);
+}
+
 START_TEST(wmvcore)
 {
     HRESULT hr;
@@ -3431,6 +3664,7 @@ START_TEST(wmvcore)
     test_WMCreateWriterPriv();
     test_urlextension();
     test_iscontentprotected();
+    test_sync_reader_allocator();
     test_sync_reader_settings();
     test_sync_reader_streaming();
     test_sync_reader_types();

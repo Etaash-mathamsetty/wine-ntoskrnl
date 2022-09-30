@@ -158,6 +158,9 @@ struct wm_stream
      * compressed samples. Rather, the behaviour of the reader objects differs
      * in nontrivial ways depending on this field. */
     bool read_compressed;
+
+    IWMReaderAllocatorEx *output_allocator;
+    IWMReaderAllocatorEx *stream_allocator;
 };
 
 struct wm_reader

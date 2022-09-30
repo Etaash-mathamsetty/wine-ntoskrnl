@@ -26,11 +26,20 @@ audiodata.bin RCDATA audiodata.bin
 /* @makedep: audioconvdata.bin */
 audioconvdata.bin RCDATA audioconvdata.bin
 
+/* @makedep: aacencdata.bin */
+aacencdata.bin RCDATA aacencdata.bin
+
+/* @makedep: aacdecdata.bin */
+aacdecdata.bin RCDATA aacdecdata.bin
+
 /* @makedep: wmaencdata.bin */
 wmaencdata.bin RCDATA wmaencdata.bin
 
 /* @makedep: wmadecdata.bin */
 wmadecdata.bin RCDATA wmadecdata.bin
+
+/* @makedep: wmvencdata.bin */
+wmvencdata.bin RCDATA wmvencdata.bin
 
 /* Generated with:
  *  gst-launch-1.0 filesrc location=dlls/mf/tests/audiodata.bin ! \

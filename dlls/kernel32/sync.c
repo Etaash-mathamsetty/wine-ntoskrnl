@@ -787,6 +787,97 @@ BOOL WINAPI BindIoCompletionCallback( HANDLE handle, LPOVERLAPPED_COMPLETION_ROU
 }
 
 
+BOOL WINAPI InitializeSynchronizationBarrier(LPSYNCHRONIZATION_BARRIER barrier, LONG total_threads, LONG spin_count)
+{
+    if (!barrier)
+        return FALSE;
+    /* number of threads in barrier */
+    barrier->phase.HighPart = 0;
+    /* phase number, idk what it is, so I won't use it */
+    barrier->phase.LowPart = 0;
+    InitializeSRWLock(&barrier->lock);
+    barrier->max_threads = total_threads;
+    if(spin_count == -1)
+        barrier->max_spins = 2000;
+    else
+        barrier->max_spins = spin_count;
+    return TRUE;
+}
+
+BOOL WINAPI EnterSynchronizationBarrier(LPSYNCHRONIZATION_BARRIER barrier, DWORD flags)
+{
+    DWORD flag;
+    LONG cur_threadcount = 0, spin_count = 0;
+    if (!barrier)
+        return FALSE;
+
+    if (flags & SYNCHRONIZATION_BARRIER_FLAGS_BLOCK_ONLY)
+    {
+        flag = 0x1; /* block */
+    }
+    else if (flags & SYNCHRONIZATION_BARRIER_FLAGS_SPIN_ONLY)
+    {
+        flag = 0x2; /* spin */
+    }
+    else
+    {
+        flag = 0x3; /* spin then block */ 
+    }
+
+    AcquireSRWLockExclusive(&barrier->lock);
+    barrier->phase.HighPart++;
+    cur_threadcount = barrier->phase.HighPart;
+    ReleaseSRWLockExclusive(&barrier->lock);
+
+    /* spin */
+    if (flag & 0x1)
+    {  
+       while(TRUE)
+       {
+            YieldProcessor();
+            AcquireSRWLockShared(&barrier->lock);
+            if(barrier->phase.HighPart >= barrier->max_threads || spin_count >= barrier->max_spins)
+            {
+               ReleaseSRWLockShared(&barrier->lock);
+               break;
+            }
+            ReleaseSRWLockShared(&barrier->lock);
+            spin_count++;
+       }
+    }
+    if (flag & 0x2)
+    {
+        while(TRUE)
+        {
+            AcquireSRWLockShared(&barrier->lock);
+            if(barrier->phase.HighPart >= barrier->max_threads)
+            {
+                ReleaseSRWLockShared(&barrier->lock);
+                break;
+            }
+            ReleaseSRWLockShared(&barrier->lock);
+        }
+    }
+
+    /* preperations to reuse barrier */
+    if (cur_threadcount == barrier->max_threads)
+    {
+        AcquireSRWLockExclusive(&barrier->lock);
+        barrier->phase.HighPart = 0;
+        ReleaseSRWLockExclusive(&barrier->lock);
+        return TRUE;
+    }
+
+    return FALSE;    
+}
+
+BOOL WINAPI DeleteSynchronizationBarrier(LPSYNCHRONIZATION_BARRIER barrier)
+{
+    /* nothing to do lol */
+    return TRUE;
+}
+
+
 #ifdef __i386__
 
 /***********************************************************************

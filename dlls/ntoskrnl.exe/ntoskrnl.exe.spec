@@ -73,6 +73,7 @@
 @ stub WmiGetClock
 @ stub Kei386EoiHelper
 @ stub Kii386SpinOnSpinLock
+@ stdcall KeIpiGenericCall(ptr long)
 @ stub CcCanIWrite
 @ stub CcCopyRead
 @ stub CcCopyWrite
@@ -557,6 +558,7 @@
 @ stdcall KeGetCurrentProcessorNumber() NtGetCurrentProcessorNumber
 @ stdcall KeGetCurrentProcessorNumberEx(ptr)
 @ stdcall KeGetCurrentThread()
+@ stdcall KeGetProcessorNumberFromIndex(long ptr)
 @ stub KeGetPreviousMode
 @ stub KeGetRecommendedSharedDataAlignment
 @ stub KeI386AbiosCall

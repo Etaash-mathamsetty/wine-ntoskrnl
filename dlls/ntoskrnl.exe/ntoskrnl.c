@@ -3001,19 +3001,7 @@ PVOID WINAPI MmMapLockedPagesSpecifyCache(PMDLX mdl, KPROCESSOR_MODE AccessMode,
         return NULL;
     }
 
-    switch (CacheType)
-    {
-        case MmNonCached:
-            protect |= PAGE_NOCACHE;
-            break;
-        case MmWriteCombined:
-            protect |= PAGE_WRITECOMBINE;
-            break;
-        default:
-            break;
-    }
-
-    addr = VirtualAlloc(NULL, mdl->ByteCount, MEM_COMMIT|MEM_RESERVE, protect);
+    addr = MmAllocateContiguousMemorySpecifyCache(mdl->ByteCount, (PHYSICAL_ADDRESS)((LONGLONG)BaseAddress), (PHYSICAL_ADDRESS)0LL, (PHYSICAL_ADDRESS)0LL, CacheType);
 
     if(!addr)
     {
@@ -3615,6 +3603,18 @@ ULONG WINAPI KeQueryMaximumProcessorCountEx(USHORT group_number)
 ULONG WINAPI KeQueryMaximumProcessorCount(void)
 {
     return KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+}
+
+NTSTATUS WINAPI KeGetProcessorNumberFromIndex(ULONG number, PPROCESSOR_NUMBER process_number)
+{
+    FIXME(": semi-stub %lu %p", number, process_number);
+    if(!process_number)
+    {
+        return STATUS_INVALID_PARAMETER_2;
+    }
+    memset(process_number, 0, sizeof(*process_number));
+    process_number->Number = number;
+    return STATUS_SUCCESS;
 }
 
 /***********************************************************************
@@ -4687,6 +4687,93 @@ BOOLEAN WINAPI KeSignalCallDpcSynchronize(void *barrier)
 void WINAPI KeSignalCallDpcDone(void *barrier)
 {
     InterlockedDecrement((LONG *)barrier);
+}
+
+struct generic_call_ipi_context
+{
+    PKIPI_BROADCAST_WORKER function;
+    ULONG_PTR context;
+    GROUP_AFFINITY cpu_index;
+    LPSYNCHRONIZATION_BARRIER barrier;
+};
+
+static void WINAPI generic_call_ipi_callback(TP_CALLBACK_INSTANCE *instance, void *context)
+{
+    struct generic_call_ipi_context* c = (struct generic_call_ipi_context*) context;
+    GROUP_AFFINITY old, new;
+
+    FIXME("%p %p\n", instance, context);
+
+    NtQueryInformationThread(GetCurrentThread(), ThreadGroupInformation, &old, sizeof(old), NULL);
+
+    new = c->cpu_index;
+
+    NtSetInformationThread(GetCurrentThread(), ThreadGroupInformation, &new, sizeof(new));
+
+    EnterSynchronizationBarrier(c->barrier, SYNCHRONIZATION_BARRIER_FLAGS_SPIN_ONLY);
+
+    c->function(c->context);
+
+    NtSetInformationThread(GetCurrentThread(), ThreadGroupInformation, &old, sizeof(old));
+}
+
+ULONG_PTR WINAPI KeIpiGenericCall(PKIPI_BROADCAST_WORKER function, ULONG_PTR context)
+{
+    /* FIXME: needs work, will enable later */
+#if 0
+    PTP_POOL threads;
+    SYNCHRONIZATION_BARRIER barrier;
+    TP_CALLBACK_ENVIRON env = {0};
+    struct generic_call_ipi_context* thread_context;
+    ULONG cpu_count;
+    GROUP_AFFINITY cur_cpu;
+    ULONG_PTR ret;
+    FIXME("%p %lld\n", function, context);
+    threads = CreateThreadpool(NULL);
+    cpu_count = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    thread_context = (struct generic_call_ipi_context *)calloc(cpu_count, sizeof(struct generic_call_ipi_context));
+
+    SetThreadpoolThreadMaximum(threads, cpu_count-1);
+    SetThreadpoolThreadMinimum(threads, cpu_count-1);
+    
+    InitializeSynchronizationBarrier(&barrier, cpu_count, -1);
+
+    NtQueryInformationThread(GetCurrentThread(), ThreadGroupInformation, &cur_cpu, sizeof(cur_cpu), NULL);
+
+    FIXME("mask %llx\n", cur_cpu.Mask);
+
+    env.Version = 1;
+    env.Pool = threads;
+
+    for(int i = 0; i < cpu_count; i++)
+    {
+        if((1 << i) == cur_cpu.Mask)
+            continue;
+        thread_context[i].barrier = &barrier;
+        thread_context[i].function = function;
+        thread_context[i].context = context;
+        memset(&thread_context[i].cpu_index, 0, sizeof(thread_context[i].cpu_index));
+        thread_context[i].cpu_index.Mask = (1 << i);
+
+        TrySubmitThreadpoolCallback(generic_call_ipi_callback, &thread_context[i], &env);
+    }
+
+    EnterSynchronizationBarrier(&barrier, SYNCHRONIZATION_BARRIER_FLAGS_SPIN_ONLY);
+
+    ret = function(context);
+
+    WaitForSingleObject(threads, INFINITE);
+
+    free(thread_context);
+    CloseThreadpool(threads);
+    DeleteSynchronizationBarrier(&barrier);
+
+    FIXME("done!\n");
+
+    return ret;
+#else
+    return function(context);
+#endif
 }
 
 void * WINAPI PsGetProcessSectionBaseAddress(PEPROCESS process)

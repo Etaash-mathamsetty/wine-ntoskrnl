@@ -260,7 +260,6 @@
 # @ stub DeleteStateAtomValue
 # @ stub DeleteStateContainer
 # @ stub DeleteStateContainerValue
-# @ stub DeleteSynchronizationBarrier
 @ stdcall DeleteTimerQueueEx(long long)
 @ stdcall DeleteTimerQueueTimer(long long long)
 @ stdcall DeleteVolumeMountPointW(wstr)
@@ -293,7 +292,6 @@
 @ stdcall EncodeSystemPointer(ptr) ntdll.RtlEncodeSystemPointer
 # @ stub EnterCriticalPolicySectionInternal
 @ stdcall EnterCriticalSection(ptr) ntdll.RtlEnterCriticalSection
-# @ stub EnterSynchronizationBarrier
 @ stdcall EnumCalendarInfoExEx(ptr wstr long wstr long long)
 @ stdcall EnumCalendarInfoExW(ptr long long long)
 @ stdcall EnumCalendarInfoW(ptr long long long)
@@ -840,7 +838,6 @@
 @ stdcall InitializeSRWLock(ptr) ntdll.RtlInitializeSRWLock
 @ stdcall InitializeSecurityDescriptor(ptr long)
 @ stdcall InitializeSid(ptr ptr long)
-# @ stub InitializeSynchronizationBarrier
 # @ stub InstallELAMCertificateInfo
 @ stdcall -arch=i386 InterlockedCompareExchange(ptr long long)
 @ stdcall -arch=i386 -ret64 InterlockedCompareExchange64(ptr int64 int64) ntdll.RtlInterlockedCompareExchange64

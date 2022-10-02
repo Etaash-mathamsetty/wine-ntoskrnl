@@ -370,6 +370,7 @@
 @ stdcall -import DeleteProcThreadAttributeList(ptr)
 # @ stub DisableThreadProfiling
 @ stdcall DisassociateCurrentThreadFromCallback(ptr) NTDLL.TpDisassociateCallback
+@ stdcall DeleteSynchronizationBarrier(ptr) 
 @ stdcall DeleteTimerQueue(long)
 @ stdcall -import DeleteTimerQueueEx(long long)
 @ stdcall -import DeleteTimerQueueTimer(long long long)
@@ -394,6 +395,7 @@
 @ stdcall EndUpdateResourceA(long long)
 @ stdcall EndUpdateResourceW(long long)
 @ stdcall EnterCriticalSection(ptr) NTDLL.RtlEnterCriticalSection
+@ stdcall EnterSynchronizationBarrier(ptr long)
 @ stdcall EnumCalendarInfoA(ptr long long long)
 @ stdcall EnumCalendarInfoExA(ptr long long long)
 @ stdcall -import EnumCalendarInfoExEx(ptr wstr long wstr long long)
@@ -962,6 +964,7 @@
 @ stdcall -import InitializeProcThreadAttributeList(ptr long long ptr)
 @ stdcall InitializeSListHead(ptr) NTDLL.RtlInitializeSListHead
 @ stdcall InitializeSRWLock(ptr) NTDLL.RtlInitializeSRWLock
+@ stdcall InitializeSynchronizationBarrier(ptr long long)
 @ stdcall -arch=i386 InterlockedCompareExchange (ptr long long)
 @ stdcall -arch=i386 -ret64 InterlockedCompareExchange64(ptr int64 int64) NTDLL.RtlInterlockedCompareExchange64
 @ stdcall -arch=i386 InterlockedDecrement(ptr)

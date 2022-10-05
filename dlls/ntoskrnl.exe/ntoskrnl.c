@@ -4297,10 +4297,32 @@ NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUT
 /***********************************************************************
  *           IoCreateNotificationEvent (NTOSKRNL.EXE.@)
  */
-PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *handle)
+PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *ret_handle)
 {
-    FIXME( "stub: %s %p\n", debugstr_us(name), handle );
-    return NULL;
+    OBJECT_ATTRIBUTES attr;
+    HANDLE handle;
+    KEVENT* event;
+    NTSTATUS ret;
+
+    TRACE("(%p %p)\n", name, handle);
+
+    InitializeObjectAttributes(&attr, name, 0, 0, NULL);
+    ret = NtCreateEvent(&handle, EVENT_ALL_ACCESS, &attr, NotificationEvent, TRUE);
+    if(ret)
+    {
+        FIXME("FAIL!\n");
+        return NULL;
+    }
+
+    if(kernel_object_from_handle(handle, ExEventObjectType, (void**)&event))
+    {
+        FIXME("FAIL 2!\n");
+        NtClose(handle);
+        return NULL;
+    }
+    *ret_handle = handle;
+    
+    return event;
 }
 
 

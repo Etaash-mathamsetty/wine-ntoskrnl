@@ -4304,7 +4304,7 @@ PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *ret_handl
     KEVENT* event;
     NTSTATUS ret;
 
-    TRACE("(%p %p)\n", name, handle);
+    TRACE("(%p %p)\n", name, ret_handle);
 
     InitializeObjectAttributes(&attr, name, 0, 0, NULL);
     ret = NtCreateEvent(&handle, EVENT_ALL_ACCESS, &attr, NotificationEvent, TRUE);

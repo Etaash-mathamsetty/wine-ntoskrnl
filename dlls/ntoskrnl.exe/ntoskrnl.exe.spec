@@ -589,7 +589,7 @@
 @ stub KeInsertHeadQueue
 @ stdcall KeInsertQueue(ptr ptr)
 @ stub KeInsertQueueApc
-@ stub KeInsertQueueDpc(ptr ptr ptr)
+@ stdcall KeInsertQueueDpc(ptr ptr ptr)
 @ stub KeIsAttachedProcess
 @ stub KeIsExecutingDpc
 @ stdcall KeLeaveCriticalRegion()

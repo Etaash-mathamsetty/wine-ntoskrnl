@@ -784,6 +784,7 @@ struct object_token
     LONG ref;
 
     HKEY token_key;
+    WCHAR *token_id;
 };
 
 static struct object_token *impl_from_ISpObjectToken( ISpObjectToken *iface )
@@ -831,6 +832,7 @@ static ULONG WINAPI token_Release( ISpObjectToken *iface )
     if (!ref)
     {
         if (This->token_key) RegCloseKey( This->token_key );
+        free(This->token_id);
         heap_free( This );
     }
 
@@ -950,6 +952,7 @@ static HRESULT WINAPI token_SetId( ISpObjectToken *iface,
     if (res) return SPERR_NOT_FOUND;
 
     This->token_key = key;
+    This->token_id = wcsdup(token_id);
 
     return S_OK;
 }
@@ -957,8 +960,28 @@ static HRESULT WINAPI token_SetId( ISpObjectToken *iface,
 static HRESULT WINAPI token_GetId( ISpObjectToken *iface,
                                    LPWSTR *token_id )
 {
-    FIXME( "stub\n" );
-    return E_NOTIMPL;
+    struct object_token *This = impl_from_ISpObjectToken( iface );
+
+    TRACE( "%p, %p\n", This, token_id);
+
+    if (!This->token_key)
+        return SPERR_UNINITIALIZED;
+
+    if (!token_id)
+        return E_POINTER;
+
+    if (!This->token_id)
+    {
+        FIXME("Loading default category not supported.\n");
+        return E_POINTER;
+    }
+
+    *token_id = CoTaskMemAlloc( (wcslen(This->token_id) + 1) * sizeof(WCHAR));
+    if (!*token_id)
+        return E_OUTOFMEMORY;
+
+    wcscpy(*token_id, This->token_id);
+    return S_OK;
 }
 
 static HRESULT WINAPI token_GetCategory( ISpObjectToken *iface,
@@ -1075,6 +1098,7 @@ HRESULT token_create( IUnknown *outer, REFIID iid, void **obj )
     This->ref = 1;
 
     This->token_key = NULL;
+    This->token_id = NULL;
 
     hr = ISpObjectToken_QueryInterface( &This->ISpObjectToken_iface, iid, obj );
 

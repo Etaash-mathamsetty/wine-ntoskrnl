@@ -588,7 +588,7 @@ static BOOL dwarf2_fill_attr(const dwarf2_parse_context_t* ctx,
 
     case DW_FORM_data8:
         attr->u.lluvalue = dwarf2_get_u8(data);
-        TRACE("data8<%s>\n", wine_dbgstr_longlong(attr->u.uvalue));
+        TRACE("data8<%Ix>\n", attr->u.uvalue);
         break;
 
     case DW_FORM_ref1:
@@ -671,7 +671,7 @@ static BOOL dwarf2_fill_attr(const dwarf2_parse_context_t* ctx,
 
     case DW_FORM_sec_offset:
         attr->u.lluvalue = dwarf2_get_addr(data, ctx->head.offset_size);
-        TRACE("sec_offset<%s>\n", wine_dbgstr_longlong(attr->u.lluvalue));
+        TRACE("sec_offset<%I64x>\n", attr->u.lluvalue);
         break;
 
     case DW_FORM_GNU_ref_alt:
@@ -2312,9 +2312,7 @@ static void dwarf2_parse_subprogram_block(dwarf2_subprogram_t* subpgm,
         }
     }
 
-    symt_close_func_block(subpgm->ctx->module_ctx->module, subpgm->current_func, subpgm->current_block, 0);
-    subpgm->current_block = symt_check_tag(subpgm->current_block->container, SymTagBlock) ?
-        (struct symt_block*)subpgm->current_block->container : NULL;
+    subpgm->current_block = symt_close_func_block(subpgm->ctx->module_ctx->module, subpgm->current_func, subpgm->current_block);
 }
 
 static struct symt* dwarf2_parse_subprogram(dwarf2_debug_info_t* di)
@@ -2970,7 +2968,7 @@ static BOOL dwarf2_parse_compilation_unit(dwarf2_parse_context_t* ctx)
             struct vector*              children;
             dwarf2_debug_info_t*        child = NULL;
             unsigned int                i;
-            struct attribute            stmt_list;
+            struct attribute            stmt_list, low_pc;
             struct attribute            comp_dir;
             struct attribute            language;
 
@@ -2981,6 +2979,9 @@ static BOOL dwarf2_parse_compilation_unit(dwarf2_parse_context_t* ctx)
             if (!dwarf2_find_attribute(di, DW_AT_comp_dir, &comp_dir))
                 comp_dir.u.string = NULL;
 
+            if (!dwarf2_find_attribute(di, DW_AT_low_pc, &low_pc))
+                low_pc.u.uvalue = 0;
+
             if (!dwarf2_find_attribute(di, DW_AT_language, &language))
                 language.u.uvalue = DW_LANG_C;
 
@@ -2988,6 +2989,7 @@ static BOOL dwarf2_parse_compilation_unit(dwarf2_parse_context_t* ctx)
 
             ctx->compiland = symt_new_compiland(ctx->module_ctx->module,
                                                 source_new(ctx->module_ctx->module, comp_dir.u.string, name.u.string));
+            ctx->compiland->address = ctx->module_ctx->load_offset + low_pc.u.uvalue;
             dwarf2_cache_cuhead(ctx->module_ctx->module->format_info[DFI_DWARF]->u.dwarf2_info, ctx->compiland, &ctx->head);
             di->symt = &ctx->compiland->symt;
             children = dwarf2_get_di_children(di);
@@ -3685,7 +3687,7 @@ static ULONG_PTR eval_expression(const struct module* module, struct cpu_stack_w
             tmp = 0;
             if (!sw_read_mem(csw, stack[sp], &tmp, module->format_info[DFI_DWARF]->u.dwarf2_info->word_size))
             {
-                ERR("Couldn't read memory at %s\n", wine_dbgstr_longlong(stack[sp]));
+                ERR("Couldn't read memory at %I64x\n", stack[sp]);
                 tmp = 0;
             }
             stack[sp] = tmp;
@@ -3735,7 +3737,7 @@ static ULONG_PTR eval_expression(const struct module* module, struct cpu_stack_w
             sz = dwarf2_parse_byte(&ctx);
             if (!sw_read_mem(csw, stack[sp], &tmp, sz))
             {
-                ERR("Couldn't read memory at %s\n", wine_dbgstr_longlong(stack[sp]));
+                ERR("Couldn't read memory at %I64x\n", stack[sp]);
                 tmp = 0;
             }
             /* do integral promotion */
@@ -3769,7 +3771,7 @@ static void apply_frame_state(const struct module* module, struct cpu_stack_walk
         *cfa = eval_expression(module, csw, (const unsigned char*)state->cfa_offset, context);
         if (!sw_read_mem(csw, *cfa, cfa, csw->cpu->word_size))
         {
-            WARN("Couldn't read memory at %s\n", wine_dbgstr_longlong(*cfa));
+            WARN("Couldn't read memory at %I64x\n", *cfa);
             return;
         }
         break;

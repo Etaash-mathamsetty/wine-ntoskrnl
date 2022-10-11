@@ -4342,6 +4342,7 @@ static void test_wndproc(void)
         SetForegroundWindow(GetDesktopWindow());
         ok(!expect_messages->message, "Expected message %#x for window %#x, but didn't receive it, i=%u.\n",
                 expect_messages->message, expect_messages->window, i);
+        flaky_if(i == 0)
         ok(!windowposchanged_received, "Received WM_WINDOWPOSCHANGED but did not expect it, i=%u.\n", i);
         expect_messages = NULL;
 
@@ -5287,6 +5288,7 @@ static void test_cursor_pos(void)
     ok(ret, "Failed to set cursor position.\n");
     flush_events();
 
+    flaky
     ok((!expect_pos->x && !expect_pos->y) || broken(expect_pos - points == 7),
         "Didn't receive MOUSEMOVE %u (%ld, %ld).\n",
         (unsigned)(expect_pos - points), expect_pos->x, expect_pos->y);

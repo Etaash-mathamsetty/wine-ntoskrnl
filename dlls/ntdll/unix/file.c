@@ -34,6 +34,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <limits.h>
 #include <unistd.h>
@@ -97,6 +98,9 @@
 #endif
 #ifdef HAVE_SYS_STATFS_H
 #include <sys/statfs.h>
+#endif
+#ifdef HAVE_SYS_XATTR_H
+#include <sys/xattr.h>
 #endif
 #include <time.h>
 #include <unistd.h>
@@ -166,6 +170,9 @@ typedef struct
 #define MAX_DIR_ENTRY_LEN 255  /* max length of a directory entry in chars */
 
 #define MAX_IGNORED_FILES 4
+
+#define SAMBA_XATTR_DOS_ATTRIB  "user.DOSATTRIB"
+#define XATTR_ATTRIBS_MASK      (FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM)
 
 struct file_identity
 {
@@ -354,6 +361,67 @@ NTSTATUS errno_to_status( int err )
         return STATUS_UNSUCCESSFUL;
     }
 }
+
+
+static int xattr_fremove( int filedes, const char *name )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return fremovexattr( filedes, name, 0 );
+# else
+    return fremovexattr( filedes, name );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+
+static int xattr_fset( int filedes, const char *name, const void *value, size_t size )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return fsetxattr( filedes, name, value, size, 0, 0 );
+# else
+    return fsetxattr( filedes, name, value, size, 0 );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+
+static int xattr_get( const char *path, const char *name, void *value, size_t size )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return getxattr( path, name, value, size, 0, 0 );
+# else
+    return getxattr( path, name, value, size );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+
+static int xattr_fget( int filedes, const char *name, void *value, size_t size )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return fgetxattr( filedes, name, value, size, 0, 0 );
+# else
+    return fgetxattr( filedes, name, value, size );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
 
 /* get space from the current directory data buffer, allocating a new one if necessary */
 static void *get_dir_data_space( struct dir_data *data, unsigned int size )
@@ -1451,6 +1519,27 @@ static inline ULONG get_file_attributes( const struct stat *st )
 }
 
 
+/* decode the xattr-stored DOS attributes */
+static int parse_samba_dos_attrib_data( char *data, int len )
+{
+    char *end;
+    int val;
+
+    if (len > 2 && data[0] == '0' && data[1] == 'x')
+    {
+        data[len] = 0;
+        val = strtol( data, &end, 16 );
+        if (!*end) return val & XATTR_ATTRIBS_MASK;
+    }
+    else
+    {
+        static BOOL once;
+        if (!once++) FIXME( "Unhandled " SAMBA_XATTR_DOS_ATTRIB " extended attribute value.\n" );
+    }
+    return 0;
+}
+
+
 static BOOL fd_is_mount_point( int fd, const struct stat *st )
 {
     struct stat parent;
@@ -1462,7 +1551,8 @@ static BOOL fd_is_mount_point( int fd, const struct stat *st )
 /* get the stat info and file attributes for a file (by file descriptor) */
 static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULONG *attr )
 {
-    int ret;
+    char attr_data[65];
+    int attr_len, ret;
 
     *attr = 0;
     ret = fstat( fd, st );
@@ -1471,7 +1561,60 @@ static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULON
     /* consider mount points to be reparse points (IO_REPARSE_TAG_MOUNT_POINT) */
     if ((options & FILE_OPEN_REPARSE_POINT) && fd_is_mount_point( fd, st ))
         *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+
+    attr_len = xattr_fget( fd, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
+    if (attr_len != -1)
+        *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
+    else if (errno != ENODATA && errno != ENOTSUP)
+        WARN( "Failed to get extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)\n",
+              errno, strerror( errno ) );
+
     return ret;
+}
+
+
+static int fd_set_dos_attrib( int fd, ULONG attr )
+{
+    /* we only store the HIDDEN and SYSTEM attributes */
+    attr &= XATTR_ATTRIBS_MASK;
+    if (attr != 0)
+    {
+        /* encode the attributes in Samba 3 ASCII format. Samba 4 has extended
+         * this format with more features, but retains compatibility with the
+         * earlier format. */
+        char data[11];
+        int len = sprintf( data, "0x%x", attr );
+        return xattr_fset( fd, SAMBA_XATTR_DOS_ATTRIB, data, len );
+    }
+    else return xattr_fremove( fd, SAMBA_XATTR_DOS_ATTRIB );
+}
+
+
+/* set the stat info and file attributes for a file (by file descriptor) */
+NTSTATUS fd_set_file_info( int fd, ULONG attr )
+{
+    struct stat st;
+
+    if (fstat( fd, &st ) == -1) return errno_to_status( errno );
+    if (attr & FILE_ATTRIBUTE_READONLY)
+    {
+        if (S_ISDIR( st.st_mode))
+            WARN("FILE_ATTRIBUTE_READONLY ignored for directory.\n");
+        else
+            st.st_mode &= ~0222; /* clear write permission bits */
+    }
+    else
+    {
+        /* add write permission only where we already have read permission */
+        st.st_mode |= (0600 | ((st.st_mode & 044) >> 1)) & (~start_umask);
+    }
+    if (fchmod( fd, st.st_mode ) == -1) return errno_to_status( errno );
+
+    if (fd_set_dos_attrib( fd, attr ) == -1 && errno != ENOTSUP)
+        WARN( "Failed to set extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)\n",
+              errno, strerror( errno ) );
+
+    return STATUS_SUCCESS;
 }
 
 
@@ -1479,7 +1622,8 @@ static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULON
 static int get_file_info( const char *path, struct stat *st, ULONG *attr )
 {
     char *parent_path;
-    int ret;
+    char attr_data[65];
+    int attr_len, ret;
 
     *attr = 0;
     ret = lstat( path, st );
@@ -1505,6 +1649,14 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
         free( parent_path );
     }
     *attr |= get_file_attributes( st );
+
+    attr_len = xattr_get( path, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
+    if (attr_len != -1)
+        *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
+    else if (errno != ENODATA && errno != ENOTSUP)
+        WARN( "Failed to get extended attribute " SAMBA_XATTR_DOS_ATTRIB " from \"%s\". errno %d (%s)\n",
+              path, errno, strerror( errno ) );
+
     return ret;
 }
 
@@ -3850,6 +4002,20 @@ NTSTATUS WINAPI NtCreateFile( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBU
             io->Information = FILE_OVERWRITTEN;
             break;
         }
+
+        if (io->Information == FILE_CREATED && (attributes & XATTR_ATTRIBS_MASK))
+        {
+            int fd, needs_close;
+
+            /* set any DOS extended attributes */
+            if (!server_get_unix_fd( *handle, 0, &fd, &needs_close, NULL, NULL ))
+            {
+                if (fd_set_dos_attrib( fd, attributes ) == -1 && errno != ENOTSUP)
+                    WARN( "Failed to set extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)",
+                          errno, strerror( errno ) );
+                if (needs_close) close( fd );
+            }
+        }
     }
     else if (status == STATUS_TOO_MANY_OPENED_FILES)
     {
@@ -4363,7 +4529,6 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
     case FileBasicInformation:
         if (len >= sizeof(FILE_BASIC_INFORMATION))
         {
-            struct stat st;
             const FILE_BASIC_INFORMATION *info = ptr;
             LARGE_INTEGER mtime, atime;
 
@@ -4377,25 +4542,7 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 status = set_file_times( fd, &mtime, &atime );
 
             if (status == STATUS_SUCCESS && info->FileAttributes)
-            {
-                if (fstat( fd, &st ) == -1) status = errno_to_status( errno );
-                else
-                {
-                    if (info->FileAttributes & FILE_ATTRIBUTE_READONLY)
-                    {
-                        if (S_ISDIR( st.st_mode))
-                            WARN("FILE_ATTRIBUTE_READONLY ignored for directory.\n");
-                        else
-                            st.st_mode &= ~0222; /* clear write permission bits */
-                    }
-                    else
-                    {
-                        /* add write permission only where we already have read permission */
-                        st.st_mode |= (0600 | ((st.st_mode & 044) >> 1)) & (~start_umask);
-                    }
-                    if (fchmod( fd, st.st_mode ) == -1) status = errno_to_status( errno );
-                }
-            }
+                status = fd_set_file_info( fd, info->FileAttributes );
 
             if (needs_close) close( fd );
         }

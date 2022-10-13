@@ -117,8 +117,33 @@ static HRESULT WINAPI data_key_SetStringValue( ISpRegDataKey *iface,
 static HRESULT WINAPI data_key_GetStringValue( ISpRegDataKey *iface,
                                                LPCWSTR name, LPWSTR *value )
 {
-    FIXME( "stub\n" );
-    return E_NOTIMPL;
+    struct data_key *This = impl_from_ISpRegDataKey( iface );
+    DWORD ret, size;
+    WCHAR *content;
+
+    TRACE( "%p, %s, %p\n", This, debugstr_w(name), value);
+
+    if (!This->key)
+        return E_HANDLE;
+
+    size = 0;
+    ret = RegGetValueW( This->key, NULL, name, RRF_RT_REG_SZ, NULL, NULL, &size );
+    if (ret != ERROR_SUCCESS)
+        return SPERR_NOT_FOUND;
+
+    content = CoTaskMemAlloc(size);
+    if (!content)
+        return E_OUTOFMEMORY;
+
+    ret = RegGetValueW( This->key, NULL, name, RRF_RT_REG_SZ, NULL, content, &size );
+    if (ret != ERROR_SUCCESS)
+    {
+        CoTaskMemFree(content);
+        return HRESULT_FROM_WIN32(ret);
+    }
+
+    *value = content;
+    return S_OK;
 }
 
 static HRESULT WINAPI data_key_SetDWORD( ISpRegDataKey *iface,
@@ -145,8 +170,28 @@ static HRESULT WINAPI data_key_OpenKey( ISpRegDataKey *iface,
 static HRESULT WINAPI data_key_CreateKey( ISpRegDataKey *iface,
                                           LPCWSTR name, ISpDataKey **sub_key )
 {
-    FIXME( "stub\n" );
-    return E_NOTIMPL;
+    struct data_key *This = impl_from_ISpRegDataKey( iface );
+    ISpRegDataKey *spregkey;
+    HRESULT hr;
+    HKEY key;
+    LONG res;
+
+    TRACE( "%p, %s, %p\n", This, debugstr_w(name), sub_key );
+
+    res = RegCreateKeyExW( This->key, name, 0, NULL, 0, KEY_ALL_ACCESS, NULL, &key, NULL );
+    if (res != ERROR_SUCCESS)
+        return HRESULT_FROM_WIN32(res);
+
+    hr = data_key_create(NULL, &IID_ISpRegDataKey, (void**)&spregkey);
+    if (SUCCEEDED(hr))
+    {
+        hr = ISpRegDataKey_SetKey(spregkey, key, FALSE);
+        if (SUCCEEDED(hr))
+            hr = ISpRegDataKey_QueryInterface(spregkey, &IID_ISpDataKey, (void**)sub_key);
+        ISpRegDataKey_Release(spregkey);
+    }
+
+    return hr;
 }
 
 static HRESULT WINAPI data_key_DeleteKey( ISpRegDataKey *iface, LPCWSTR name )

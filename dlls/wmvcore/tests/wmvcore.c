@@ -2505,28 +2505,24 @@ static void test_async_reader_allocate(IWMReader *reader,
     callback->allocated_samples = true;
 
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 0, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 1, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 2, &allocate);
-    todo_wine ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
 
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 0, &allocate);
-    todo_wine ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 1, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 2, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 3, &allocate);
-    todo_wine ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
+    ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
 
     hr = IWMReaderAdvanced2_SetAllocateForOutput(advanced, 0, TRUE);
     ok(hr == S_OK, "Got hr %#lx.\n", hr);
@@ -2536,22 +2532,18 @@ static void test_async_reader_allocate(IWMReader *reader,
     ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
 
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 0, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(allocate == TRUE, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(allocate == TRUE, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 1, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(allocate == TRUE, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(allocate == TRUE, "Got allocate %d.\n", allocate);
 
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 1, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 2, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
 
     run_async_reader(reader, advanced, callback);
 
@@ -2572,22 +2564,18 @@ static void test_async_reader_allocate(IWMReader *reader,
     ok(hr == E_INVALIDARG, "Got hr %#lx.\n", hr);
 
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 0, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForOutput(advanced, 1, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(!allocate, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(!allocate, "Got allocate %d.\n", allocate);
 
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 1, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(allocate == TRUE, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(allocate == TRUE, "Got allocate %d.\n", allocate);
     hr = IWMReaderAdvanced2_GetAllocateForStream(advanced, 2, &allocate);
-    todo_wine ok(hr == S_OK, "Got hr %#lx.\n", hr);
-    if (hr == S_OK)
-        ok(allocate == TRUE, "Got allocate %d.\n", allocate);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    ok(allocate == TRUE, "Got allocate %d.\n", allocate);
 
     run_async_reader(reader, advanced, callback);
 

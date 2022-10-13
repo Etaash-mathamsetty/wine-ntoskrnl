@@ -526,7 +526,6 @@ static HRESULT WINAPI video_processor_ProcessOutput(IMFTransform *iface, DWORD f
 {
     struct video_processor *impl = impl_from_IMFTransform(iface);
     MFT_OUTPUT_STREAM_INFO info;
-    struct wg_sample *wg_sample;
     HRESULT hr;
 
     TRACE("iface %p, flags %#lx, count %lu, samples %p, status %p.\n", iface, flags, count, samples, status);
@@ -534,29 +533,19 @@ static HRESULT WINAPI video_processor_ProcessOutput(IMFTransform *iface, DWORD f
     if (count != 1)
         return E_INVALIDARG;
 
-    if (FAILED(hr = IMFTransform_GetOutputStreamInfo(iface, 0, &info)))
-        return hr;
-
     if (!impl->wg_transform)
         return MF_E_TRANSFORM_TYPE_NOT_SET;
 
-    samples[0].dwStatus = 0;
-    if (!samples[0].pSample) return E_INVALIDARG;
+    samples->dwStatus = 0;
+    if (!samples->pSample)
+        return E_INVALIDARG;
 
-    if (FAILED(hr = wg_sample_create_mf(samples[0].pSample, &wg_sample)))
+    if (FAILED(hr = IMFTransform_GetOutputStreamInfo(iface, 0, &info)))
         return hr;
 
-    if (wg_sample->max_size < info.cbSize)
-    {
-        wg_sample_release(wg_sample);
-        return MF_E_BUFFERTOOSMALL;
-    }
-
-    if (SUCCEEDED(hr = wg_transform_read_mf(impl->wg_transform, wg_sample, NULL,
-            &samples[0].dwStatus)))
+    if (SUCCEEDED(hr = wg_transform_read_mf(impl->wg_transform, samples->pSample,
+            info.cbSize, NULL, &samples->dwStatus)))
         wg_sample_queue_flush(impl->wg_sample_queue, false);
-
-    wg_sample_release(wg_sample);
 
     return hr;
 }

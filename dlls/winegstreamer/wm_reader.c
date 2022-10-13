@@ -20,6 +20,50 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(wmvcore);
 
+struct wm_stream
+{
+    struct wm_reader *reader;
+    struct wg_parser_stream *wg_stream;
+    struct wg_format format;
+    WMT_STREAM_SELECTION selection;
+    WORD index;
+    bool eos;
+    /* Note that we only pretend to read compressed samples, and instead output
+     * uncompressed samples regardless of whether we are configured to read
+     * compressed samples. Rather, the behaviour of the reader objects differs
+     * in nontrivial ways depending on this field. */
+    bool read_compressed;
+
+    IWMReaderAllocatorEx *output_allocator;
+    IWMReaderAllocatorEx *stream_allocator;
+};
+
+struct wm_reader
+{
+    IUnknown IUnknown_inner;
+    IWMSyncReader2 IWMSyncReader2_iface;
+    IWMHeaderInfo3 IWMHeaderInfo3_iface;
+    IWMLanguageList IWMLanguageList_iface;
+    IWMPacketSize2 IWMPacketSize2_iface;
+    IWMProfile3 IWMProfile3_iface;
+    IWMReaderPlaylistBurn IWMReaderPlaylistBurn_iface;
+    IWMReaderTimecode IWMReaderTimecode_iface;
+    IUnknown *outer;
+    LONG refcount;
+
+    CRITICAL_SECTION cs;
+    QWORD start_time;
+
+    IStream *source_stream;
+    HANDLE file;
+    HANDLE read_thread;
+    bool read_thread_shutdown;
+    struct wg_parser *wg_parser;
+
+    struct wm_stream *streams;
+    WORD stream_count;
+};
+
 static struct wm_stream *get_stream_by_output_number(struct wm_reader *reader, DWORD output)
 {
     if (output < reader->stream_count)
@@ -1509,16 +1553,18 @@ static const char *get_major_type_string(enum wg_major_type type)
     {
         case WG_MAJOR_TYPE_AUDIO:
             return "audio";
+        case WG_MAJOR_TYPE_AUDIO_MPEG1:
+            return "mpeg1-audio";
+        case WG_MAJOR_TYPE_AUDIO_WMA:
+            return "wma";
         case WG_MAJOR_TYPE_VIDEO:
             return "video";
+        case WG_MAJOR_TYPE_VIDEO_CINEPAK:
+            return "cinepak";
+        case WG_MAJOR_TYPE_VIDEO_H264:
+            return "h264";
         case WG_MAJOR_TYPE_UNKNOWN:
             return "unknown";
-        case WG_MAJOR_TYPE_MPEG1_AUDIO:
-            return "mpeg1-audio";
-        case WG_MAJOR_TYPE_WMA:
-            return "wma";
-        case WG_MAJOR_TYPE_H264:
-            return "h264";
     }
     assert(0);
     return NULL;
@@ -1567,7 +1613,7 @@ static WORD get_earliest_buffer(struct wm_reader *reader, struct wg_parser_buffe
     return stream_number;
 }
 
-HRESULT wm_reader_get_stream_sample(struct wm_reader *reader, IWMReaderCallbackAdvanced *callback_advanced, WORD stream_number,
+static HRESULT wm_reader_get_stream_sample(struct wm_reader *reader, WORD stream_number,
         INSSBuffer **ret_sample, QWORD *pts, QWORD *duration, DWORD *flags, WORD *ret_stream_number)
 {
     struct wg_parser_stream *wg_stream;
@@ -1626,12 +1672,6 @@ HRESULT wm_reader_get_stream_sample(struct wm_reader *reader, IWMReaderCallbackA
         else if (stream->read_compressed && stream->stream_allocator)
             hr = IWMReaderAllocatorEx_AllocateForStreamEx(stream->stream_allocator, stream->index + 1,
                     wg_buffer.size, &sample, 0, 0, 0, NULL);
-        else if (callback_advanced && stream->read_compressed && stream->allocate_stream)
-            hr = IWMReaderCallbackAdvanced_AllocateForStream(callback_advanced,
-                    stream->index + 1, wg_buffer.size, &sample, NULL);
-        else if (callback_advanced && !stream->read_compressed && stream->allocate_output)
-            hr = IWMReaderCallbackAdvanced_AllocateForOutput(callback_advanced,
-                    stream->index, wg_buffer.size, &sample, NULL);
         /* FIXME: Should these be pooled? */
         else if (!(object = calloc(1, offsetof(struct buffer, data[wg_buffer.size]))))
             hr = E_OUTOFMEMORY;
@@ -1688,42 +1728,6 @@ HRESULT wm_reader_get_stream_sample(struct wm_reader *reader, IWMReaderCallbackA
         *ret_stream_number = stream_number;
         return S_OK;
     }
-}
-
-HRESULT wm_reader_set_allocate_for_output(struct wm_reader *reader, DWORD output, BOOL allocate)
-{
-    struct wm_stream *stream;
-
-    EnterCriticalSection(&reader->cs);
-
-    if (!(stream = get_stream_by_output_number(reader, output)))
-    {
-        LeaveCriticalSection(&reader->cs);
-        return E_INVALIDARG;
-    }
-
-    stream->allocate_output = !!allocate;
-
-    LeaveCriticalSection(&reader->cs);
-    return S_OK;
-}
-
-HRESULT wm_reader_set_allocate_for_stream(struct wm_reader *reader, WORD stream_number, BOOL allocate)
-{
-    struct wm_stream *stream;
-
-    EnterCriticalSection(&reader->cs);
-
-    if (!(stream = wm_reader_get_stream_by_stream_number(reader, stream_number)))
-    {
-        LeaveCriticalSection(&reader->cs);
-        return E_INVALIDARG;
-    }
-
-    stream->allocate_stream = !!allocate;
-
-    LeaveCriticalSection(&reader->cs);
-    return S_OK;
 }
 
 static struct wm_reader *impl_from_IUnknown(IUnknown *iface)
@@ -1905,7 +1909,7 @@ static HRESULT WINAPI reader_GetNextSample(IWMSyncReader2 *iface,
 
     EnterCriticalSection(&reader->cs);
 
-    hr = wm_reader_get_stream_sample(reader, NULL, stream_number, sample, pts, duration, flags, &stream_number);
+    hr = wm_reader_get_stream_sample(reader, stream_number, sample, pts, duration, flags, &stream_number);
     if (output_number && hr == S_OK)
         *output_number = stream_number - 1;
     if (ret_stream_number && (hr == S_OK || stream_number))
@@ -1966,9 +1970,10 @@ static HRESULT WINAPI reader_GetOutputFormat(IWMSyncReader2 *iface,
             format.u.audio.format = WG_AUDIO_FORMAT_S16LE;
             break;
 
-        case WG_MAJOR_TYPE_MPEG1_AUDIO:
-        case WG_MAJOR_TYPE_WMA:
-        case WG_MAJOR_TYPE_H264:
+        case WG_MAJOR_TYPE_AUDIO_MPEG1:
+        case WG_MAJOR_TYPE_AUDIO_WMA:
+        case WG_MAJOR_TYPE_VIDEO_CINEPAK:
+        case WG_MAJOR_TYPE_VIDEO_H264:
             FIXME("Format %u not implemented!\n", format.major_type);
             break;
         case WG_MAJOR_TYPE_UNKNOWN:
@@ -2004,9 +2009,10 @@ static HRESULT WINAPI reader_GetOutputFormatCount(IWMSyncReader2 *iface, DWORD o
             *count = ARRAY_SIZE(video_formats);
             break;
 
-        case WG_MAJOR_TYPE_MPEG1_AUDIO:
-        case WG_MAJOR_TYPE_WMA:
-        case WG_MAJOR_TYPE_H264:
+        case WG_MAJOR_TYPE_AUDIO_MPEG1:
+        case WG_MAJOR_TYPE_AUDIO_WMA:
+        case WG_MAJOR_TYPE_VIDEO_CINEPAK:
+        case WG_MAJOR_TYPE_VIDEO_H264:
             FIXME("Format %u not implemented!\n", format.major_type);
             /* fallthrough */
         case WG_MAJOR_TYPE_AUDIO:
@@ -2555,11 +2561,6 @@ static const IWMSyncReader2Vtbl reader_vtbl =
     reader_SetAllocateForStream,
     reader_GetAllocateForStream
 };
-
-struct wm_reader *wm_reader_from_sync_reader_inner(IUnknown *iface)
-{
-    return impl_from_IUnknown(iface);
-}
 
 HRESULT WINAPI winegstreamer_create_wm_sync_reader(IUnknown *outer, void **out)
 {

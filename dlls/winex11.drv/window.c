@@ -1893,6 +1893,9 @@ LRESULT X11DRV_DesktopWindowProc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
     case WM_WINE_ADD_TAB:
         send_notify_message( (HWND)wp, WM_X11DRV_ADD_TAB, 0, 0 );
         break;
+    case WM_DISPLAYCHANGE:
+        X11DRV_resize_desktop();
+        break;
     }
     return NtUserMessageCall( hwnd, msg, wp, lp, 0, NtUserDefWindowProc, FALSE );
 }
@@ -2993,8 +2996,28 @@ LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
             release_win_data( data );
         }
         return 0;
-    case WM_X11DRV_RESIZE_DESKTOP:
-        X11DRV_resize_desktop();
+    case WM_X11DRV_DESKTOP_RESIZED:
+        if ((data = get_win_data( hwnd )))
+        {
+            /* update the full screen state */
+            update_net_wm_states( data );
+
+            if (data->whole_window)
+            {
+                /* sync window position with the new virtual screen rect */
+                POINT old_pos = {.x = data->whole_rect.left - wp, .y = data->whole_rect.top - lp};
+                POINT pos = virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
+                XWindowChanges changes = {.x = pos.x, .y = pos.y};
+                UINT mask = 0;
+
+                if (old_pos.x != pos.x) mask |= CWX;
+                if (old_pos.y != pos.y) mask |= CWY;
+
+                if (mask) XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
+            }
+
+            release_win_data( data );
+        }
         return 0;
     case WM_X11DRV_SET_CURSOR:
     {

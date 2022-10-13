@@ -548,43 +548,29 @@ static HRESULT WINAPI transform_ProcessOutput(IMFTransform *iface, DWORD flags, 
 {
     struct wma_decoder *decoder = impl_from_IMFTransform(iface);
     MFT_OUTPUT_STREAM_INFO info;
-    struct wg_sample *wg_sample;
     HRESULT hr;
 
     TRACE("iface %p, flags %#lx, count %lu, samples %p, status %p.\n", iface, flags, count, samples, status);
 
-    if (count > 1)
+    if (count != 1)
         return E_INVALIDARG;
 
     if (!decoder->wg_transform)
         return MF_E_TRANSFORM_TYPE_NOT_SET;
 
-    if (FAILED(hr = IMFTransform_GetOutputStreamInfo(iface, 0, &info)))
-        return hr;
-
-    *status = 0;
-    samples[0].dwStatus = 0;
-    if (!samples[0].pSample)
+    *status = samples->dwStatus = 0;
+    if (!samples->pSample)
     {
         samples[0].dwStatus = MFT_OUTPUT_DATA_BUFFER_NO_SAMPLE;
         return MF_E_TRANSFORM_NEED_MORE_INPUT;
     }
 
-    if (FAILED(hr = wg_sample_create_mf(samples[0].pSample, &wg_sample)))
+    if (FAILED(hr = IMFTransform_GetOutputStreamInfo(iface, 0, &info)))
         return hr;
 
-    wg_sample->size = 0;
-    if (wg_sample->max_size < info.cbSize)
-    {
-        wg_sample_release(wg_sample);
-        return MF_E_BUFFERTOOSMALL;
-    }
-
-    if (SUCCEEDED(hr = wg_transform_read_mf(decoder->wg_transform, wg_sample, NULL,
-            &samples[0].dwStatus)))
+    if (SUCCEEDED(hr = wg_transform_read_mf(decoder->wg_transform, samples->pSample,
+            info.cbSize, NULL, &samples->dwStatus)))
         wg_sample_queue_flush(decoder->wg_sample_queue, false);
-
-    wg_sample_release(wg_sample);
 
     return hr;
 }
@@ -864,7 +850,7 @@ HRESULT wma_decoder_create(IUnknown *outer, IUnknown **out)
             .rate = 44100,
         },
     };
-    static const struct wg_format input_format = {.major_type = WG_MAJOR_TYPE_WMA};
+    static const struct wg_format input_format = {.major_type = WG_MAJOR_TYPE_AUDIO_WMA};
     struct wg_transform *transform;
     struct wma_decoder *decoder;
     HRESULT hr;

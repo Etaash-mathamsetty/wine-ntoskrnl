@@ -365,7 +365,7 @@ threadmbcinfo* create_mbcinfo(int cp, LCID lcid, threadmbcinfo *old_mbcinfo)
   {
     if(!(mbcinfo->mbctype[i + 1] & _M1))
     {
-      if(mbcinfo->mbctype[i] & (C1_UPPER|C1_LOWER))
+      if(mbcinfo->mbctype[i + 1] & (_SBUP | _SBLOW))
         mbcinfo->mbcasemap[i] = bufA[charcount];
       charcount++;
     }
@@ -447,16 +447,81 @@ unsigned int CDECL _mbsnextc(const unsigned char* str)
 }
 
 /*********************************************************************
+ *		_mbctolower_l(MSVCRT.@)
+ */
+unsigned int CDECL _mbctolower_l(unsigned int c, _locale_t locale)
+{
+    unsigned char str[2], ret[2];
+    pthreadmbcinfo mbcinfo;
+
+    if(!locale)
+        mbcinfo = get_mbcinfo();
+    else
+        mbcinfo = locale->mbcinfo;
+
+    if (c > 0xff)
+    {
+        if (!_ismbblead_l((c >> 8) & 0xff, locale))
+            return c;
+
+        str[0] = c >> 8;
+        str[1] = c;
+        switch(__crtLCMapStringA(mbcinfo->mblcid, LCMAP_LOWERCASE,
+                    (char*)str, 2, (char*)ret, 2, mbcinfo->mbcodepage, 0))
+        {
+        case 0:
+            return c;
+        case 1:
+            return ret[0];
+        default:
+            return ret[1] + (ret[0] << 8);
+        }
+    }
+
+    return mbcinfo->mbctype[c + 1] & _SBUP ? mbcinfo->mbcasemap[c] : c;
+}
+
+/*********************************************************************
  *		_mbctolower(MSVCRT.@)
  */
 unsigned int CDECL _mbctolower(unsigned int c)
 {
-    if (_ismbblead(c))
+    return _mbctolower_l(c, NULL);
+}
+
+/*********************************************************************
+ *		_mbctoupper_l(MSVCRT.@)
+ */
+unsigned int CDECL _mbctoupper_l(unsigned int c, _locale_t locale)
+{
+    unsigned char str[2], ret[2];
+    pthreadmbcinfo mbcinfo;
+
+    if(!locale)
+        mbcinfo = get_mbcinfo();
+    else
+        mbcinfo = locale->mbcinfo;
+
+    if (c > 0xff)
     {
-      FIXME("Handle MBC chars\n");
-      return c;
+        if (!_ismbblead_l((c >> 8) & 0xff, locale))
+            return c;
+
+        str[0] = c >> 8;
+        str[1] = c;
+        switch(__crtLCMapStringA(mbcinfo->mblcid, LCMAP_UPPERCASE,
+                    (char*)str, 2, (char*)ret, 2, mbcinfo->mbcodepage, 0))
+        {
+        case 0:
+            return c;
+        case 1:
+            return ret[0];
+        default:
+            return ret[1] + (ret[0] << 8);
+        }
     }
-    return _tolower_l(c, NULL); /* ASCII CP or SB char */
+
+    return mbcinfo->mbctype[c + 1] & _SBLOW ? mbcinfo->mbcasemap[c] : c;
 }
 
 /*********************************************************************
@@ -464,12 +529,7 @@ unsigned int CDECL _mbctolower(unsigned int c)
  */
 unsigned int CDECL _mbctoupper(unsigned int c)
 {
-    if (_ismbblead(c))
-    {
-      FIXME("Handle MBC chars\n");
-      return c;
-    }
-    return _toupper_l(c, NULL); /* ASCII CP or SB char */
+    return _mbctoupper_l(c, NULL);
 }
 
 /*********************************************************************
@@ -2049,27 +2109,24 @@ unsigned char* CDECL _mbslwr(unsigned char* s)
   return ret;
 }
 
-
 /*********************************************************************
- *              _mbslwr_s(MSVCRT.@)
+ *              _mbslwr_s_l(MSVCRT.@)
  */
-int CDECL _mbslwr_s(unsigned char* s, size_t len)
+int CDECL _mbslwr_s_l(unsigned char* s, size_t len, _locale_t locale)
 {
+  unsigned char *p = s;
+
   if (!s && !len)
-  {
     return 0;
-  }
-  else if (!s || !len)
-  {
-    *_errno() = EINVAL;
+  if (!MSVCRT_CHECK_PMT(s && len))
     return EINVAL;
-  }
+
   if (get_mbcinfo()->ismbcodepage)
   {
     unsigned int c;
     for ( ; *s && len > 0; len--)
     {
-      c = _mbctolower(_mbsnextc(s));
+      c = _mbctolower_l(_mbsnextc_l(s, locale), locale);
       /* Note that I assume that the size of the character is unchanged */
       if (c > 255)
       {
@@ -2079,16 +2136,28 @@ int CDECL _mbslwr_s(unsigned char* s, size_t len)
       *s++=c;
     }
   }
-  else for ( ; *s && len > 0; s++, len--) *s = _tolower_l(*s, NULL);
-  if (*s)
+  else
   {
-    *s = '\0';
-    *_errno() = EINVAL;
+    for ( ; *s && len > 0; s++, len--)
+      *s = _tolower_l(*s, locale);
+  }
+
+  if (!MSVCRT_CHECK_PMT(len))
+  {
+    *p = 0;
     return EINVAL;
   }
+  *s = 0;
   return 0;
 }
 
+/*********************************************************************
+ *              _mbslwr_s(MSVCRT.@)
+ */
+int CDECL _mbslwr_s(unsigned char* str, size_t len)
+{
+  return _mbslwr_s_l(str, len, NULL);
+}
 
 /*********************************************************************
  *              _mbsupr(MSVCRT.@)
@@ -2117,27 +2186,24 @@ unsigned char* CDECL _mbsupr(unsigned char* s)
   return ret;
 }
 
-
 /*********************************************************************
- *              _mbsupr_s(MSVCRT.@)
+ *              _mbsupr_s_l(MSVCRT.@)
  */
-int CDECL _mbsupr_s(unsigned char* s, size_t len)
+int CDECL _mbsupr_s_l(unsigned char* s, size_t len, _locale_t locale)
 {
+  unsigned char *p = s;
+
   if (!s && !len)
-  {
     return 0;
-  }
-  else if (!s || !len)
-  {
-    *_errno() = EINVAL;
+  if (!MSVCRT_CHECK_PMT(s && len))
     return EINVAL;
-  }
+
   if (get_mbcinfo()->ismbcodepage)
   {
     unsigned int c;
     for ( ; *s && len > 0; len--)
     {
-      c = _mbctoupper(_mbsnextc(s));
+      c = _mbctoupper_l(_mbsnextc_l(s, locale), locale);
       /* Note that I assume that the size of the character is unchanged */
       if (c > 255)
       {
@@ -2147,14 +2213,27 @@ int CDECL _mbsupr_s(unsigned char* s, size_t len)
       *s++=c;
     }
   }
-  else for ( ; *s && len > 0; s++, len--) *s = _toupper_l(*s, NULL);
-  if (*s)
+  else
   {
-    *s = '\0';
-    *_errno() = EINVAL;
+    for ( ; *s && len > 0; s++, len--)
+      *s = _toupper_l(*s, locale);
+  }
+
+  if (!MSVCRT_CHECK_PMT(len))
+  {
+    *p = 0;
     return EINVAL;
   }
+  *s = 0;
   return 0;
+}
+
+/*********************************************************************
+ *              _mbsupr_s(MSVCRT.@)
+ */
+int CDECL _mbsupr_s(unsigned char* s, size_t len)
+{
+  return _mbsupr_s_l(s, len, NULL);
 }
 
 /*********************************************************************

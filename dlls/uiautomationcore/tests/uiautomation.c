@@ -3843,10 +3843,10 @@ static const struct prov_method_sequence node_from_prov5[] = {
     /* Win10v1507 and below call this. */
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
     /* Win10v1507 and below call this. */
     { &Provider2, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
-    { &Provider2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_TODO },
+    { &Provider2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider2, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
     /* These three are only done on Win10v1507 and below. */
     { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_OPTIONAL },
@@ -3868,13 +3868,13 @@ static const struct prov_method_sequence node_from_prov6[] = {
     /* Win10v1507 and below call this. */
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
     /* Win10v1507 and below call this. */
     { &Provider2, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
-    { &Provider2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_TODO },
+    { &Provider2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider2, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
     /* Only called on Windows versions past Win10v1507. */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_OPTIONAL },
     { &Provider2, FRAG_NAVIGATE, METHOD_OPTIONAL }, /* NavigateDirection_Parent */
@@ -3893,13 +3893,13 @@ static const struct prov_method_sequence node_from_prov7[] = {
     /* Win10v1507 and below call this. */
     { &Provider_child, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
     /* Win10v1507 and below call this. */
     { &Provider2, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
-    { &Provider2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_TODO },
+    { &Provider2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider2, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider2, PROV_GET_PROVIDER_OPTIONS },
     /* Only called on Windows versions past Win10v1507. */
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_OPTIONAL },
     { &Provider2, FRAG_NAVIGATE, METHOD_OPTIONAL }, /* NavigateDirection_Parent */
@@ -4136,7 +4136,7 @@ static void test_UiaNodeFromProvider(void)
     hr = UiaNodeFromProvider(&Provider.IRawElementProviderSimple_iface, &node);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
     ok(Provider.ref == 2, "Unexpected refcnt %ld\n", Provider.ref);
-    todo_wine CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
+    CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
     called_winproc_GETOBJECT_CLIENT = expect_winproc_GETOBJECT_CLIENT = 0;
 
     hr = UiaGetPropertyValue(node, UIA_ProviderDescriptionPropertyId, &v);
@@ -4178,7 +4178,7 @@ static void test_UiaNodeFromProvider(void)
     SET_EXPECT(winproc_GETOBJECT_CLIENT);
     hr = UiaNodeFromProvider(&Provider.IRawElementProviderSimple_iface, &node);
     ok(hr == S_OK, "Unexpected hr %#lx\n", hr);
-    todo_wine CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
+    CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
     called_winproc_GETOBJECT_CLIENT = expect_winproc_GETOBJECT_CLIENT = 0;
 
     /* Win10v1507 and below hold a reference to the root provider for the HWND */
@@ -4227,7 +4227,7 @@ static void test_UiaNodeFromProvider(void)
     SET_EXPECT(winproc_GETOBJECT_CLIENT);
     hr = UiaNodeFromProvider(&Provider.IRawElementProviderSimple_iface, &node);
     ok(hr == S_OK, "Unexpected hr %#lx\n", hr);
-    todo_wine CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
+    CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
     called_winproc_GETOBJECT_CLIENT = expect_winproc_GETOBJECT_CLIENT = 0;
 
     hr = UiaGetPropertyValue(node, UIA_ProviderDescriptionPropertyId, &v);
@@ -4242,7 +4242,7 @@ static void test_UiaNodeFromProvider(void)
     }
     ok_method_sequence(node_from_prov6, "node_from_prov6");
 
-    todo_wine ok(Provider2.ref == 2, "Unexpected refcnt %ld\n", Provider2.ref);
+    ok(Provider2.ref == 2, "Unexpected refcnt %ld\n", Provider2.ref);
     ok(Provider.ref == 2, "Unexpected refcnt %ld\n", Provider.ref);
 
     ok(!!node, "node == NULL\n");
@@ -4261,7 +4261,7 @@ static void test_UiaNodeFromProvider(void)
     SET_EXPECT(winproc_GETOBJECT_CLIENT);
     hr = UiaNodeFromProvider(&Provider_child.IRawElementProviderSimple_iface, &node);
     ok(hr == S_OK, "Unexpected hr %#lx\n", hr);
-    todo_wine CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
+    CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
     called_winproc_GETOBJECT_CLIENT = expect_winproc_GETOBJECT_CLIENT = 0;
 
     hr = UiaGetPropertyValue(node, UIA_ProviderDescriptionPropertyId, &v);
@@ -4276,7 +4276,7 @@ static void test_UiaNodeFromProvider(void)
     }
     ok_method_sequence(node_from_prov7, "node_from_prov7");
 
-    todo_wine ok(Provider2.ref == 2, "Unexpected refcnt %ld\n", Provider2.ref);
+    ok(Provider2.ref == 2, "Unexpected refcnt %ld\n", Provider2.ref);
     ok(Provider_child.ref == 2, "Unexpected refcnt %ld\n", Provider.ref);
 
     ok(!!node, "node == NULL\n");
@@ -4328,14 +4328,14 @@ static const struct prov_method_sequence get_elem_arr_prop_seq[] = {
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider_child, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
     { &Provider_child2, PROV_GET_PROVIDER_OPTIONS },
     /* Win10v1507 and below call this. */
     { &Provider_child2, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child2, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider_child2, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child2, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider_child2, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child2, PROV_GET_PROVIDER_OPTIONS },
     { &Provider_child, PROV_GET_PROPERTY_VALUE },
     { &Provider_child2, PROV_GET_PROPERTY_VALUE },
     { 0 }
@@ -4839,7 +4839,7 @@ static void test_UiaGetRuntimeId(void)
     SET_EXPECT(winproc_GETOBJECT_CLIENT);
     hr = UiaNodeFromProvider(&Provider.IRawElementProviderSimple_iface, &node);
     ok(hr == S_OK, "Unexpected hr %#lx\n", hr);
-    todo_wine CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
+    CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
     called_winproc_GETOBJECT_CLIENT = expect_winproc_GETOBJECT_CLIENT = 0;
 
     VariantInit(&v);
@@ -4972,8 +4972,8 @@ static const struct prov_method_sequence node_from_hwnd2[] = {
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
     /* Windows 10+ calls this. */
     { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_OPTIONAL },
@@ -4987,8 +4987,8 @@ static const struct prov_method_sequence node_from_hwnd3[] = {
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_TODO }, /* UIA_ProviderDescriptionPropertyId */
     { 0 }
 };
@@ -5016,7 +5016,7 @@ static const struct prov_method_sequence node_from_hwnd5[] = {
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider_child, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
     /* Only done in Windows 8+. */
     { &Provider_child, FRAG_GET_RUNTIME_ID, METHOD_OPTIONAL },
     { &Provider_child, FRAG_GET_FRAGMENT_ROOT, METHOD_OPTIONAL },
@@ -5034,13 +5034,13 @@ static const struct prov_method_sequence node_from_hwnd6[] = {
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider_child, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
     /* Next 4 are only done in Windows 8+. */
     { &Provider_child, FRAG_GET_RUNTIME_ID, METHOD_OPTIONAL },
     { &Provider_child, FRAG_GET_FRAGMENT_ROOT, METHOD_OPTIONAL },
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_OPTIONAL },
     { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_OPTIONAL },
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
     /* Next two are only done on Win10v1809+. */
     { &Provider_child, FRAG_GET_FRAGMENT_ROOT, METHOD_OPTIONAL },
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_OPTIONAL },
@@ -5059,14 +5059,14 @@ static const struct prov_method_sequence node_from_hwnd7[] = {
     { &Provider_child, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider_child, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
-    { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER, METHOD_TODO },
+    { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider_child, PROV_GET_PROPERTY_VALUE, METHOD_TODO }, /* UIA_ProviderDescriptionPropertyId */
     { 0 }
 };
@@ -5077,8 +5077,8 @@ static const struct prov_method_sequence node_from_hwnd8[] = {
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider, PROV_GET_PROPERTY_VALUE }, /* UIA_ProviderDescriptionPropertyId */
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_TODO }, /* UIA_ControlTypePropertyId */
     { 0 }
@@ -5091,7 +5091,7 @@ static const struct prov_method_sequence node_from_hwnd9[] = {
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     /* Only done in Windows 8+. */
     { &Provider, FRAG_GET_RUNTIME_ID, METHOD_OPTIONAL },
     { &Provider, FRAG_GET_FRAGMENT_ROOT, METHOD_OPTIONAL },
@@ -5109,7 +5109,7 @@ static const struct prov_method_sequence disconnect_prov1[] = {
     { &Provider_child, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider_child, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider_child, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider_child, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider_child, PROV_GET_PROVIDER_OPTIONS },
     { &Provider_child, FRAG_GET_RUNTIME_ID },
     { &Provider_child, FRAG_GET_FRAGMENT_ROOT },
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
@@ -5124,7 +5124,7 @@ static const struct prov_method_sequence disconnect_prov2[] = {
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider, FRAG_GET_RUNTIME_ID },
     { &Provider, FRAG_GET_FRAGMENT_ROOT },
     { 0 }
@@ -5137,7 +5137,7 @@ static const struct prov_method_sequence disconnect_prov3[] = {
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, PROV_GET_PROPERTY_VALUE }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { &Provider, FRAG_GET_RUNTIME_ID },
     { 0 }
 };
@@ -5148,7 +5148,7 @@ static const struct prov_method_sequence disconnect_prov4[] = {
     { &Provider, PROV_GET_PROPERTY_VALUE, METHOD_OPTIONAL }, /* UIA_NativeWindowHandlePropertyId */
     { &Provider, PROV_GET_HOST_RAW_ELEMENT_PROVIDER },
     { &Provider, FRAG_NAVIGATE, METHOD_TODO }, /* NavigateDirection_Parent */
-    { &Provider, PROV_GET_PROVIDER_OPTIONS, METHOD_TODO },
+    { &Provider, PROV_GET_PROVIDER_OPTIONS },
     { 0 }
 };
 
@@ -5352,7 +5352,7 @@ static DWORD WINAPI uia_node_from_handle_test_thread(LPVOID param)
     SET_EXPECT(winproc_GETOBJECT_CLIENT);
     hr = UiaGetPropertyValue(node, UIA_LabeledByPropertyId, &v);
     ok(hr == S_OK, "Unexpected hr %#lx\n", hr);
-    todo_wine CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
+    CHECK_CALLED(winproc_GETOBJECT_UiaRoot);
     called_winproc_GETOBJECT_CLIENT = expect_winproc_GETOBJECT_CLIENT = 0;
     ok(Provider_child.ref == 2, "Unexpected refcnt %ld\n", Provider_child.ref);
 

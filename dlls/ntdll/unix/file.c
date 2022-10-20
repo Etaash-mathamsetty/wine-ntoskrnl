@@ -1565,10 +1565,15 @@ static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULON
     attr_len = xattr_fget( fd, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
     if (attr_len != -1)
         *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
-    else if (errno != ENODATA && errno != ENOTSUP)
+    else
+    {
+        if (errno == ENOTSUP) return ret;
+#ifdef ENODATA
+        if (errno == ENODATA) return ret;
+#endif
         WARN( "Failed to get extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)\n",
               errno, strerror( errno ) );
-
+    }
     return ret;
 }
 
@@ -1653,10 +1658,15 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
     attr_len = xattr_get( path, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
     if (attr_len != -1)
         *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
-    else if (errno != ENODATA && errno != ENOTSUP)
+    else
+    {
+        if (errno == ENOTSUP) return ret;
+#ifdef ENODATA
+        if (errno == ENODATA) return ret;
+#endif
         WARN( "Failed to get extended attribute " SAMBA_XATTR_DOS_ATTRIB " from \"%s\". errno %d (%s)\n",
               path, errno, strerror( errno ) );
-
+    }
     return ret;
 }
 
@@ -4417,12 +4427,12 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 if (size > 0x10000) size = 0x10000;
                 if ((tmpbuf = malloc( size )))
                 {
+                    if (needs_close) close( fd );
                     if (!server_get_unix_fd( handle, FILE_READ_DATA, &fd, &needs_close, NULL, NULL ))
                     {
                         int res = recv( fd, tmpbuf, size, MSG_PEEK );
                         info->MessagesAvailable = (res > 0);
                         info->NextMessageSize = (res >= 0) ? res : MAILSLOT_NO_MESSAGE;
-                        if (needs_close) close( fd );
                     }
                     free( tmpbuf );
                 }
@@ -6174,6 +6184,28 @@ NTSTATUS WINAPI NtCancelIoFileEx( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_
     return status;
 }
 
+
+/**************************************************************************
+ *           NtCancelSynchronousIoFile (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCancelSynchronousIoFile( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_BLOCK *io_status )
+{
+    NTSTATUS status;
+
+    TRACE( "(%p %p %p)\n", handle, io, io_status );
+
+    SERVER_START_REQ( cancel_sync )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        req->iosb   = wine_server_client_ptr( io );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    io_status->u.Status = status;
+    io_status->Information = 0;
+    return status;
+}
 
 /******************************************************************
  *           NtLockFile   (NTDLL.@)

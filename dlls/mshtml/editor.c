@@ -1249,7 +1249,7 @@ HRESULT setup_edit_mode(HTMLDocumentObj *doc)
         }
     }
 
-    hres = IPersistMoniker_Load(&doc->basedoc.IPersistMoniker_iface, TRUE, mon, NULL, 0);
+    hres = IPersistMoniker_Load(&doc->IPersistMoniker_iface, TRUE, mon, NULL, 0);
     IMoniker_Release(mon);
     if(FAILED(hres))
         return hres;
@@ -1266,11 +1266,11 @@ HRESULT setup_edit_mode(HTMLDocumentObj *doc)
 
         if(doc->hostui)
             IDocHostUIHandler_ShowUI(doc->hostui, DOCHOSTUITYPE_AUTHOR,
-                    &doc->basedoc.IOleInPlaceActiveObject_iface, &doc->basedoc.IOleCommandTarget_iface,
+                    &doc->IOleInPlaceActiveObject_iface, &doc->IOleCommandTarget_iface,
                     doc->frame, doc->ip_window);
 
         if(doc->ip_window)
-            call_set_active_object(doc->ip_window, &doc->basedoc.IOleInPlaceActiveObject_iface);
+            call_set_active_object(doc->ip_window, &doc->IOleInPlaceActiveObject_iface);
 
         SetRectEmpty(&rcBorderWidths);
         if(doc->frame)

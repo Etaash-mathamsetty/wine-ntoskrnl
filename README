@@ -4,17 +4,17 @@ also this project is "dead", im working on upstreaming the changes now
 This wasn't the anti cheat I intended to fix, but it's nice to see that it works now.
 For those of you looking to contribute, find a better way to implement MmMapLockedPagesSpecifyCache (which would get a ton of anti-cheats to just "start working")
 TODO:
-InitializeSynchronizationBarrier
-EnterSynchronizationBarrier
-DeleteSynchronizationBarrier
-KeIpiGenericCall
+InitializeSynchronizationBarrier (needs tests, move to kernelbase)
+EnterSynchronizationBarrier (needs tests, move to kernelbase)
+DeleteSynchronizationBarrier (needs tests, move to kernelbase)
+KeIpiGenericCall (needs tests)
 I had a big brain time moment and realized that I need to implement support for the parity flag (PF) in my instruction emulation code, 
 once that's done, I will add it here (this might be all I need to get vanguard to work)
 implementing PF, SF, and OF didn't seem to help, but I still have to implement AF, so once that's done I will attempt it again
 it also seems that the INT instruction needs to be emulated
 
 wine bugs fixed (probably):
-https://bugs.winehq.org/show_bug.cgi?id=49394 (fixed upstream)
+https://bugs.winehq.org/show_bug.cgi?id=49394 (upstreamed)
 https://bugs.winehq.org/show_bug.cgi?id=46760 (reimplementing using NtAllocateVirtualMemoryEx which recently got some support for memory allignments and stuff)
 
 notable bugs:

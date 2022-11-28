@@ -2,7 +2,9 @@ This fork of wine attempts to get more anti-cheats to work.
 success (kinda): some games using xigncode3 now work, thanks for letting me know @K1ngfisher on discord. 
 also this project is "dead", im working on upstreaming the changes now
 This wasn't the anti cheat I intended to fix, but it's nice to see that it works now.
-For those of you looking to contribute, find a better way to implement MmMapLockedPagesSpecifyCache (which would get a ton of anti-cheats to just "start working")
+For those of you looking to contribute, find a better way to implement MmMapLockedPagesSpecifyCache, 
+or just cheat and don't map anything and return the address to the data being mapped without mapping it :p 
+(which would get a ton of anti-cheats to just "start working")
 TODO:
 InitializeSynchronizationBarrier (needs tests, move to kernelbase)
 EnterSynchronizationBarrier (needs tests, move to kernelbase)
